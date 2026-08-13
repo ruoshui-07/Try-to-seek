@@ -338,62 +338,76 @@
     // 消息管理（核心修改：冻结滚动 + 增量追加）
     // ============================================
     async function loadMessages(conversationId, isRefresh = false) {
-        if (State.isLoading) return;
-        State.isLoading = true;
+    if (State.isLoading) return;
+    State.isLoading = true;
 
-        // ✨ 冻结滚动位置
-        const chatContainer = DOM.chatContainer;
-        const prevScrollTop = chatContainer.scrollTop;
-        const prevScrollHeight = chatContainer.scrollHeight;
+    const chatContainer = DOM.chatContainer;
+    const messagesList = DOM.messagesList;
 
-        try {
-            const { data, error } = await window.TryToSeek.supabase
-                .from('messages')
-                .select('*')
-                .eq('conversation_id', conversationId)
-                .order('created_at', { ascending: true });
-
-            if (error) throw error;
-
-            const oldCount = State.messages.length;
-            const newCount = (data || []).length;
-            const hasNewMessages = newCount > oldCount;
-
-            // 如果是轮询刷新且有新消息，使用增量追加
-            if (isRefresh && hasNewMessages && oldCount > 0) {
-                const newMsgs = data.slice(oldCount);
-                State.messages = data || [];
-                appendNewMessages(newMsgs);
-
-                // 检测管理员回复
-                const hasAdminReply = newMsgs.some(m => m.sender_type === 'admin');
-                if (hasAdminReply && !State.isTyping) {
-                    showToast('收到新回复！', 'success');
-                    playNotificationSound();
-                }
-            } else {
-                // 首次加载或手动刷新，全量渲染
-                State.messages = data || [];
-                renderMessages();
-            }
-
-            State.lastMessageCount = State.messages.length;
-            markMessagesAsRead(conversationId);
-
-            // ✨ 恢复滚动位置：如果之前已经在底部，则滚动到底部；否则保持原位置
-            if (prevScrollTop + chatContainer.clientHeight >= prevScrollHeight - 50) {
-                scrollToBottom();
-            } else {
-                chatContainer.scrollTop = prevScrollTop;
-            }
-
-        } catch (error) {
-            console.error('加载消息失败:', error);
-            if (!isRefresh) showToast('加载消息失败: ' + error.message, 'error');
-        } finally {
-            State.isLoading = false;
-        }
+    // ✨ 1. 固定容器高度，防止高度变化引起的闪烁
+    const containerHeight = chatContainer.offsetHeight;
+    if (containerHeight > 0) {
+        chatContainer.style.minHeight = containerHeight + 'px';
     }
+
+    // ✨ 2. 隐藏消息列表（保留占位）
+    messagesList.style.visibility = 'hidden';
+
+    // ✨ 3. 冻结滚动位置
+    const prevScrollTop = chatContainer.scrollTop;
+    const prevScrollHeight = chatContainer.scrollHeight;
+
+    try {
+        const { data, error } = await window.TryToSeek.supabase
+            .from('messages')
+            .select('*')
+            .eq('conversation_id', conversationId)
+            .order('created_at', { ascending: true });
+
+        if (error) throw error;
+
+        const oldCount = State.messages.length;
+        const newCount = (data || []).length;
+        const hasNewMessages = newCount > oldCount;
+
+        // 如果是轮询刷新且有新消息，使用增量追加
+        if (isRefresh && hasNewMessages && oldCount > 0) {
+            const newMsgs = data.slice(oldCount);
+            State.messages = data || [];
+            appendNewMessages(newMsgs);
+
+            const hasAdminReply = newMsgs.some(m => m.sender_type === 'admin');
+            if (hasAdminReply && !State.isTyping) {
+                showToast('收到新回复！', 'success');
+                playNotificationSound();
+            }
+        } else {
+            // 首次加载或手动刷新，全量渲染
+            State.messages = data || [];
+            renderMessages();
+        }
+
+        State.lastMessageCount = State.messages.length;
+        markMessagesAsRead(conversationId);
+
+        // ✨ 4. 恢复滚动位置
+        if (prevScrollTop + chatContainer.clientHeight >= prevScrollHeight - 50) {
+            scrollToBottom();
+        } else {
+            chatContainer.scrollTop = prevScrollTop;
+        }
+
+    } catch (error) {
+        console.error('加载消息失败:', error);
+        if (!isRefresh) showToast('加载消息失败: ' + error.message, 'error');
+    } finally {
+        State.isLoading = false;
+
+        // ✨ 5. 恢复可见并取消固定高度
+        messagesList.style.visibility = 'visible';
+        chatContainer.style.minHeight = '';
+    }
+}
 
     // ✨ 新增：增量追加新消息到列表末尾
     function appendNewMessages(newMsgs) {
