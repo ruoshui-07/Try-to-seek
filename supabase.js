@@ -14,11 +14,11 @@
 // 优先使用 config.js 中的配置
 const SUPABASE_URL = (typeof TRYTOSEEK_CONFIG !== 'undefined') 
     ? TRYTOSEEK_CONFIG.SUPABASE_URL 
-    : 'YOUR_SUPABASE_URL_HERE';
+    : 'https://bxkeqfsewhotnbcnfhme.supabase.co';
 
 const SUPABASE_ANON_KEY = (typeof TRYTOSEEK_CONFIG !== 'undefined')
     ? TRYTOSEEK_CONFIG.SUPABASE_ANON_KEY
-    : 'YOUR_SUPABASE_ANON_KEY_HERE';
+    : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4a2VxZnNld2hvdG5iY25maG1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2MTI2MzAsImV4cCI6MjEwMjE4ODYzMH0.8yEsZ0ltoLHoXkhmDdLDHaX7G6D1DoqzLRXyMaVv6Ig';
 
 // 创建 Supabase 客户端
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
