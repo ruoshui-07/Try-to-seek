@@ -495,6 +495,7 @@
                 await insertAdminMessage({
                     conversation_id: State.currentConversationId,
                     sender_type: 'admin',
+                    sender_id: State.currentUser.id,   // ✨ 修复：添加 sender_id
                     content_type: 'text',
                     content: text
                 });
@@ -510,6 +511,7 @@
                 await insertAdminMessage({
                     conversation_id: State.currentConversationId,
                     sender_type: 'admin',
+                    sender_id: State.currentUser.id,   // ✨ 修复：添加 sender_id
                     content_type: contentType,
                     content: url,
                     file_name: file.name,
@@ -537,10 +539,14 @@
     }
 
     async function insertAdminMessage(msgData) {
+        console.log('管理员发送数据:', msgData);  // ✨ 添加日志便于调试
         const { error } = await window.TryToSeek.supabase
             .from('messages')
             .insert(msgData);
-        if (error) throw error;
+        if (error) {
+            console.error('❌ 管理员插入消息失败:', error);  // ✨ 详细错误日志
+            throw error;
+        }
     }
 
     // ============================================
