@@ -377,7 +377,7 @@
     State.isLoading = true;
 
     // ✨ 开始加载：将消息列表变淡（直接设置样式，不依赖CSS）
-    DOM.messagesList.style.opacity = '0.3';
+    DOM.messagesList.style.opacity = '1';
     DOM.messagesList.style.transition = 'opacity 0.2s ease'; // 加个过渡更平滑
 
     try {
