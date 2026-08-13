@@ -555,9 +555,6 @@
     // 发送消息
     // ============================================
    async function sendMessage() {
-    // 注意：clearUploadPreview 已在 IIFE 顶部定义为空函数，无需再次定义
-    // 确保没有调用 clearUploadPreview()
-
     const text = DOM.messageInput.value.trim();
     const hasFiles = State.pendingFiles.length > 0;
 
@@ -568,7 +565,7 @@
 
     // 复制待发送文件列表并清空
     const filesToSend = [...State.pendingFiles];
-    State.pendingFiles = []; // 这会触发 renderUploadPreview 清空预览
+    State.pendingFiles = [];
 
     // 清空输入框
     DOM.messageInput.value = '';
@@ -581,7 +578,7 @@
             await insertMessage({
                 conversation_id: State.currentConversationId,
                 sender_type: 'user',
-                sender_id: State.currentUser.id,  // 🔥 关键修复：加上 sender_id
+                sender_id: State.currentUser.id,   // ✨ 加上这一行
                 content_type: 'text',
                 content: text
             });
@@ -604,7 +601,7 @@
             await insertMessage({
                 conversation_id: State.currentConversationId,
                 sender_type: 'user',
-                sender_id: State.currentUser.id,  // 🔥 关键修复：加上 sender_id
+                sender_id: State.currentUser.id,   // ✨ 加上这一行
                 content_type: contentType,
                 content: url,
                 file_name: file.name,
