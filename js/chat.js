@@ -623,11 +623,18 @@
 }
     
     async function insertMessage(msgData) {
+        // 🔥 关键修改 1：打印出我们要发送的数据，方便对照数据库表结构
+        console.log('准备发送到 Supabase 的数据:', msgData);
+
         const { error } = await window.TryToSeek.supabase
-            .from('messages')
+            .from('messages') // 🔥 关键修改 2：确保这里是复数 'messages'，与你的数据库表名一致
             .insert(msgData);
 
-        if (error) throw error;
+        // 🔥 关键修改 3：如果有错误，打印出详细的错误信息（这是解决 400 错误的关键！）
+        if (error) {
+            console.error('❌ Supabase 插入失败详情:', error);
+            throw error;
+        }
     }
 
     async function updateConversationTitle(conversationId, title) {
