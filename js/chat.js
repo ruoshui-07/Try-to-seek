@@ -552,7 +552,7 @@
 
         const filesToSend = [...State.pendingFiles];
         State.pendingFiles = [];
-        clearUploadPreview();
+        // clearUploadPreview();  // 已删除此行，避免未定义函数错误
 
         // 清空输入框
         DOM.messageInput.value = '';
