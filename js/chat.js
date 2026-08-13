@@ -373,44 +373,49 @@
     // 消息管理
     // ============================================
     async function loadMessages(conversationId, isRefresh = false) {
-        if (State.isLoading) return;
-        State.isLoading = true;
+    if (State.isLoading) return;
+    State.isLoading = true;
 
-        try {
-            const { data, error } = await window.TryToSeek.supabase
-                .from('messages')
-                .select('*')
-                .eq('conversation_id', conversationId)
-                .order('created_at', { ascending: true });
+    // ✨ 新增：开始加载，让列表变淡
+    DOM.messagesList.classList.add('loading');
 
-            if (error) throw error;
+    try {
+        const { data, error } = await window.TryToSeek.supabase
+            .from('messages')
+            .select('*')
+            .eq('conversation_id', conversationId)
+            .order('created_at', { ascending: true });
 
-            const oldCount = State.messages.length;
-            State.messages = data || [];
+        if (error) throw error;
 
-            // 检测新消息（管理员回复）
-            if (isRefresh && oldCount > 0 && State.messages.length > oldCount) {
-                const newMsgs = State.messages.slice(oldCount);
-                const hasAdminReply = newMsgs.some(m => m.sender_type === 'admin');
-                if (hasAdminReply && !State.isTyping) {
-                    showToast('收到新回复！', 'success');
-                    playNotificationSound();
-                }
+        const oldCount = State.messages.length;
+        State.messages = data || [];
+
+        // 检测新消息（管理员回复）
+        if (isRefresh && oldCount > 0 && State.messages.length > oldCount) {
+            const newMsgs = State.messages.slice(oldCount);
+            const hasAdminReply = newMsgs.some(m => m.sender_type === 'admin');
+            if (hasAdminReply && !State.isTyping) {
+                showToast('收到新回复！', 'success');
+                playNotificationSound();
             }
-
-            State.lastMessageCount = State.messages.length;
-            renderMessages();
-
-            // 标记管理员消息为已读
-            markMessagesAsRead(conversationId);
-
-        } catch (error) {
-            console.error('加载消息失败:', error);
-            if (!isRefresh) showToast('加载消息失败: ' + error.message, 'error');
-        } finally {
-            State.isLoading = false;
         }
+
+        State.lastMessageCount = State.messages.length;
+        renderMessages();
+
+        // 标记管理员消息为已读
+        markMessagesAsRead(conversationId);
+
+    } catch (error) {
+        console.error('加载消息失败:', error);
+        if (!isRefresh) showToast('加载消息失败: ' + error.message, 'error');
+    } finally {
+        State.isLoading = false;
+        // ✨ 新增：加载完成，恢复正常透明度
+        DOM.messagesList.classList.remove('loading');
     }
+}
 
     function renderMessages() {
         if (State.messages.length === 0) {
