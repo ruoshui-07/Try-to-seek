@@ -68,18 +68,16 @@
     };
 
     // ============================================
-    // 【新增】安全垫：防止 clearUploadPreview 未定义
+    // 安全垫函数
     // ============================================
     function clearUploadPreview() {
-        // 这是一个空函数，确保任何地方调用都不会报错
-        // 实际的清理逻辑由 renderUploadPreview 基于 State.pendingFiles 长度自动处理
+        // 空函数，防止调用报错
     }
 
     // ============================================
     // 初始化
     // ============================================
     async function init() {
-        // 等待认证就绪
         await waitForAuth();
 
         if (!Auth.isAuthenticated()) {
@@ -90,28 +88,19 @@
         State.currentUser = Auth.getCurrentUser();
         State.isAdmin = await window.TryToSeek.isAdmin();
 
-        // 初始化UI
         initUI();
         initEventListeners();
 
-        // 加载对话列表
         await loadConversations();
 
-        // 如果有对话，自动打开第一个
         if (State.conversations.length > 0) {
             openConversation(State.conversations[0].id);
         } else {
-            // 没有对话时创建新对话
             await createNewConversation();
         }
 
-        // 启动实时监听
         startRealtimeSubscription();
-
-        // 启动轮询（兜底方案）
         startPolling();
-
-        // 检查 URL 参数（如 from=admin 等）
         checkUrlParams();
     }
 
@@ -119,7 +108,6 @@
         return new Promise((resolve) => {
             if (Auth.getCurrentUser()) return resolve();
             window.addEventListener('auth:ready', () => resolve(), { once: true });
-            // 超时保护
             setTimeout(resolve, 3000);
         });
     }
@@ -136,22 +124,18 @@
         DOM.userEmail.textContent = email;
         DOM.userAvatar.textContent = displayName.charAt(0).toUpperCase();
 
-        // 如果有头像URL
         if (user.user_metadata?.avatar_url) {
             DOM.userAvatar.innerHTML = `<img src="${user.user_metadata.avatar_url}" alt="avatar">`;
         }
 
-        // 管理员入口
         if (State.isAdmin) {
             DOM.goToAdmin.style.display = 'flex';
             DOM.adminDivider.style.display = 'block';
         }
 
-        // 主题
         const savedTheme = localStorage.getItem('trytoseek_theme') || 'dark';
         setTheme(savedTheme);
 
-        // 恢复草稿
         const savedDraft = localStorage.getItem('trytoseek_draft');
         if (savedDraft) {
             DOM.messageInput.value = savedDraft;
@@ -160,32 +144,26 @@
     }
 
     function initEventListeners() {
-        // 侧边栏切换（移动端）
         DOM.sidebarToggle.addEventListener('click', () => {
             DOM.sidebar.classList.toggle('open');
         });
 
-        // 新建对话
         DOM.newChatBtn.addEventListener('click', () => {
             createNewConversation();
         });
 
-        // 发送消息
         DOM.sendBtn.addEventListener('click', sendMessage);
 
-        // 输入框事件
         DOM.messageInput.addEventListener('input', handleInputChange);
         DOM.messageInput.addEventListener('keydown', handleKeyDown);
         DOM.messageInput.addEventListener('focus', () => { State.isTyping = true; });
         DOM.messageInput.addEventListener('blur', () => { State.isTyping = false; });
 
-        // 文件上传
         DOM.uploadImageBtn.addEventListener('click', () => DOM.imageInput.click());
         DOM.uploadFileBtn.addEventListener('click', () => DOM.fileInput.click());
         DOM.imageInput.addEventListener('change', (e) => handleFileSelect(e.target.files, 'image'));
         DOM.fileInput.addEventListener('change', (e) => handleFileSelect(e.target.files, 'file'));
 
-        // 刷新按钮
         DOM.refreshBtn.addEventListener('click', () => {
             if (State.currentConversationId) {
                 loadMessages(State.currentConversationId, true);
@@ -193,7 +171,6 @@
             }
         });
 
-        // 用户菜单
         DOM.userInfoBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             DOM.userDropdown.classList.toggle('active');
@@ -203,31 +180,26 @@
             DOM.userDropdown.classList.remove('active');
         });
 
-        // 退出登录
         DOM.logoutBtn.addEventListener('click', async () => {
             await Auth.signOut();
             window.location.href = 'login.html';
         });
 
-        // 主题切换
         DOM.themeToggle.addEventListener('click', () => {
             const current = document.documentElement.getAttribute('data-theme') || 'dark';
             const next = current === 'dark' ? 'light' : 'dark';
             setTheme(next);
         });
 
-        // 管理员入口
         DOM.goToAdmin.addEventListener('click', () => {
             window.location.href = 'admin.html';
         });
 
-        // 模态框关闭
         DOM.modalClose.addEventListener('click', closeMediaModal);
         DOM.mediaModal.addEventListener('click', (e) => {
             if (e.target === DOM.mediaModal) closeMediaModal();
         });
 
-        // 键盘快捷键
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 closeMediaModal();
@@ -235,14 +207,12 @@
             }
         });
 
-        // 页面可见性变化（切回页面时刷新）
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden && State.currentConversationId) {
                 loadMessages(State.currentConversationId, true);
             }
         });
 
-        // 防止意外关闭时保存草稿
         window.addEventListener('beforeunload', () => {
             saveDraft();
         });
@@ -351,72 +321,121 @@
             DOM.currentConvTitle.textContent = conv.title || '新对话';
         }
 
-        // 更新侧边栏激活状态
         document.querySelectorAll('.conversation-item').forEach(el => {
             el.classList.toggle('active', el.dataset.id === conversationId);
         });
 
-        // 隐藏欢迎屏幕，显示消息列表
         DOM.welcomeScreen.style.display = 'none';
         DOM.messagesList.style.display = 'block';
         DOM.messageInput.disabled = false;
         DOM.sendBtn.disabled = false;
 
-        // 加载消息
         await loadMessages(conversationId);
-
-        // 滚动到底部
         scrollToBottom();
     }
 
     // ============================================
-    // 消息管理
+    // 消息管理（核心修改：冻结滚动 + 增量追加）
     // ============================================
     async function loadMessages(conversationId, isRefresh = false) {
-    if (State.isLoading) return;
-    State.isLoading = true;
+        if (State.isLoading) return;
+        State.isLoading = true;
 
-    // ✨ 开始加载前：隐藏消息列表（但保留占位，不引起布局抖动）
-    DOM.messagesList.style.visibility = 'hidden';
+        // ✨ 冻结滚动位置
+        const chatContainer = DOM.chatContainer;
+        const prevScrollTop = chatContainer.scrollTop;
+        const prevScrollHeight = chatContainer.scrollHeight;
 
-    try {
-        const { data, error } = await window.TryToSeek.supabase
-            .from('messages')
-            .select('*')
-            .eq('conversation_id', conversationId)
-            .order('created_at', { ascending: true });
+        try {
+            const { data, error } = await window.TryToSeek.supabase
+                .from('messages')
+                .select('*')
+                .eq('conversation_id', conversationId)
+                .order('created_at', { ascending: true });
 
-        if (error) throw error;
+            if (error) throw error;
 
-        const oldCount = State.messages.length;
-        State.messages = data || [];
+            const oldCount = State.messages.length;
+            const newCount = (data || []).length;
+            const hasNewMessages = newCount > oldCount;
 
-        // 检测新消息（管理员回复）
-        if (isRefresh && oldCount > 0 && State.messages.length > oldCount) {
-            const newMsgs = State.messages.slice(oldCount);
-            const hasAdminReply = newMsgs.some(m => m.sender_type === 'admin');
-            if (hasAdminReply && !State.isTyping) {
-                showToast('收到新回复！', 'success');
-                playNotificationSound();
+            // 如果是轮询刷新且有新消息，使用增量追加
+            if (isRefresh && hasNewMessages && oldCount > 0) {
+                const newMsgs = data.slice(oldCount);
+                State.messages = data || [];
+                appendNewMessages(newMsgs);
+
+                // 检测管理员回复
+                const hasAdminReply = newMsgs.some(m => m.sender_type === 'admin');
+                if (hasAdminReply && !State.isTyping) {
+                    showToast('收到新回复！', 'success');
+                    playNotificationSound();
+                }
+            } else {
+                // 首次加载或手动刷新，全量渲染
+                State.messages = data || [];
+                renderMessages();
             }
+
+            State.lastMessageCount = State.messages.length;
+            markMessagesAsRead(conversationId);
+
+            // ✨ 恢复滚动位置：如果之前已经在底部，则滚动到底部；否则保持原位置
+            if (prevScrollTop + chatContainer.clientHeight >= prevScrollHeight - 50) {
+                scrollToBottom();
+            } else {
+                chatContainer.scrollTop = prevScrollTop;
+            }
+
+        } catch (error) {
+            console.error('加载消息失败:', error);
+            if (!isRefresh) showToast('加载消息失败: ' + error.message, 'error');
+        } finally {
+            State.isLoading = false;
         }
-
-        State.lastMessageCount = State.messages.length;
-        renderMessages();
-
-        // 标记管理员消息为已读
-        markMessagesAsRead(conversationId);
-
-    } catch (error) {
-        console.error('加载消息失败:', error);
-        if (!isRefresh) showToast('加载消息失败: ' + error.message, 'error');
-    } finally {
-        State.isLoading = false;
-        // ✨ 加载完成：恢复可见（瞬间出现，无闪烁）
-        DOM.messagesList.style.visibility = 'visible';
     }
-}
 
+    // ✨ 新增：增量追加新消息到列表末尾
+    function appendNewMessages(newMsgs) {
+        // 获取最后一个日期分组
+        let lastGroup = DOM.messagesList.querySelector('.message-group:last-child');
+        let groupEl = lastGroup;
+
+        newMsgs.forEach((msg, index) => {
+            const msgDate = new Date(msg.created_at).toDateString();
+            const lastGroupDate = groupEl ? 
+                groupEl.querySelector('.message-date-divider span')?.textContent : null;
+
+            // 判断是否需要新建日期分组
+            const needsNewGroup = !groupEl || 
+                (index === 0 && lastGroupDate !== formatDateLabel(new Date(msg.created_at)));
+
+            if (needsNewGroup) {
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'message-group';
+                groupDiv.innerHTML = `
+                    <div class="message-date-divider">
+                        <span>${formatDateLabel(new Date(msg.created_at))}</span>
+                    </div>
+                `;
+                DOM.messagesList.appendChild(groupDiv);
+                groupEl = groupDiv;
+            }
+
+            // 追加消息元素
+            const msgWrapper = document.createElement('div');
+            msgWrapper.innerHTML = renderMessage(msg);
+            const msgElement = msgWrapper.firstElementChild;
+            if (msgElement) {
+                groupEl.appendChild(msgElement);
+            }
+        });
+
+        // 重新绑定附件点击事件
+        bindAttachmentEvents();
+    }
+
+    // 全量渲染（首次加载或手动刷新时使用）
     function renderMessages() {
         if (State.messages.length === 0) {
             DOM.messagesList.innerHTML = `
@@ -431,7 +450,6 @@
             return;
         }
 
-        // 按日期分组
         const groups = groupMessagesByDate(State.messages);
 
         DOM.messagesList.innerHTML = groups.map(group => `
@@ -443,13 +461,8 @@
             </div>
         `).join('');
 
-        // 绑定附件点击事件
         bindAttachmentEvents();
-
-        // 如果不是正在输入，滚动到底部
-        if (!State.isTyping) {
-            scrollToBottom();
-        }
+        scrollToBottom();
     }
 
     function renderMessage(msg) {
@@ -563,27 +576,23 @@
         await createNewConversation();
     }
 
-    // 复制待发送文件列表并清空
     const filesToSend = [...State.pendingFiles];
     State.pendingFiles = [];
 
-    // 清空输入框
     DOM.messageInput.value = '';
     autoResizeTextarea();
     saveDraft();
 
     try {
-        // 如果有文字，先发送文字消息
         if (text) {
             await insertMessage({
                 conversation_id: State.currentConversationId,
                 sender_type: 'user',
-                sender_id: State.currentUser.id,   // ✨ 加上这一行
+                sender_id: State.currentUser.id,
                 content_type: 'text',
                 content: text
             });
 
-            // 更新对话标题（如果是第一条消息）
             const conv = State.conversations.find(c => c.id === State.currentConversationId);
             if (conv && conv.title === '新对话') {
                 const title = window.TryToSeek.generateTitle(text);
@@ -591,7 +600,6 @@
             }
         }
 
-        // 发送文件
         for (const fileData of filesToSend) {
             const { file, url } = fileData;
             const contentType = file.type.startsWith('image/') ? 'image' 
@@ -601,7 +609,7 @@
             await insertMessage({
                 conversation_id: State.currentConversationId,
                 sender_type: 'user',
-                sender_id: State.currentUser.id,   // ✨ 加上这一行
+                sender_id: State.currentUser.id,
                 content_type: contentType,
                 content: url,
                 file_name: file.name,
@@ -610,13 +618,9 @@
             });
         }
 
-        // 重新加载消息
         await loadMessages(State.currentConversationId);
-        
-        // 更新对话列表
         await loadConversations();
 
-        // 显示等待提示
         showStatusBanner('info', '✉️ 消息已发送，管理员会在看到后回复你');
         setTimeout(hideStatusBanner, 5000);
 
@@ -627,14 +631,12 @@
 }
     
     async function insertMessage(msgData) {
-        // 🔥 关键修改 1：打印出我们要发送的数据，方便对照数据库表结构
         console.log('准备发送到 Supabase 的数据:', msgData);
 
         const { error } = await window.TryToSeek.supabase
-            .from('messages') // 🔥 关键修改 2：确保这里是复数 'messages'，与你的数据库表名一致
+            .from('messages')
             .insert(msgData);
 
-        // 🔥 关键修改 3：如果有错误，打印出详细的错误信息（这是解决 400 错误的关键！）
         if (error) {
             console.error('❌ Supabase 插入失败详情:', error);
             throw error;
@@ -661,13 +663,11 @@
     // ============================================
     async function handleFileSelect(files, type) {
         for (const file of files) {
-            // 检查文件大小（限制 25MB）
             if (file.size > 25 * 1024 * 1024) {
                 showToast(`文件 "${file.name}" 超过 25MB 限制`, 'error');
                 continue;
             }
 
-            // 上传到 Supabase Storage
             try {
                 showToast(`正在上传 ${file.name}...`, 'info');
 
@@ -683,7 +683,6 @@
 
                 if (error) throw error;
 
-                // 获取公共URL（如果bucket是public）或签名URL
                 const { data: urlData } = window.TryToSeek.supabase.storage
                     .from(window.TryToSeek.STORAGE_BUCKET)
                     .getPublicUrl(fileName);
@@ -700,7 +699,6 @@
         }
 
         renderUploadPreview();
-        // 重置 input
         DOM.imageInput.value = '';
         DOM.fileInput.value = '';
     }
@@ -735,7 +733,6 @@
     function startPolling() {
         stopPolling();
         State.pollInterval = setInterval(async () => {
-            // 如果正在输入，跳过这次轮询（不覆盖用户正在打的字）
             if (State.isTyping) {
                 console.log('[Polling] 用户正在输入，跳过');
                 return;
@@ -771,9 +768,7 @@
                 },
                 (payload) => {
                     console.log('[Realtime] 新消息:', payload);
-                    // 如果是管理员回复当前对话
                     if (payload.new.conversation_id === State.currentConversationId) {
-                        // 直接添加到列表，不重新加载（避免闪烁）
                         const exists = State.messages.some(m => m.id === payload.new.id);
                         if (!exists) {
                             State.messages.push(payload.new);
@@ -784,7 +779,6 @@
                             }
                         }
                     }
-                    // 刷新对话列表
                     loadConversations();
                 }
             )
@@ -797,7 +791,6 @@
                 },
                 (payload) => {
                     console.log('[Realtime] 消息更新:', payload);
-                    // 刷新消息列表以反映更新
                     if (State.currentConversationId) {
                         loadMessages(State.currentConversationId, true);
                     }
@@ -829,14 +822,13 @@
     }
 
     // ============================================
-    // 输入处理（草稿保存 + 自适应高度）
+    // 输入处理
     // ============================================
     function handleInputChange() {
         autoResizeTextarea();
         saveDraft();
         State.isTyping = true;
 
-        // 防抖：停止输入2秒后标记为非输入状态
         clearTimeout(State.typingTimeout);
         State.typingTimeout = setTimeout(() => {
             State.isTyping = false;
@@ -844,7 +836,6 @@
     }
 
     function handleKeyDown(e) {
-        // Enter 发送（Shift+Enter 换行）
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             sendMessage();
@@ -948,11 +939,8 @@
 
     function formatMessageText(text) {
         if (!text) return '';
-        // 转义 HTML
         let html = escapeHtml(text);
-        // 转换换行
         html = html.replace(/\n/g, '<br>');
-        // 转换 URL 为链接
         html = html.replace(
             /(https?:\/\/[^\s<]+)/g, 
             '<a href="$1" target="_blank" rel="noopener">$1</a>'
@@ -993,7 +981,7 @@
     }
 
     // ============================================
-    // 暴露到全局（供 HTML onclick 使用）
+    // 暴露全局
     // ============================================
     window.ChatApp = {
         openConversation,
