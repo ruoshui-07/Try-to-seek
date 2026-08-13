@@ -12,10 +12,10 @@
 
 const TRYTOSEEK_CONFIG = {
     // Supabase 项目 URL
-    SUPABASE_URL: 'https://your-project-ref.supabase.co',
+    SUPABASE_URL: 'https://bxkeqfsewhotnbcnfhme.supabase.co',
     
     // Supabase Anon (public) Key
-    SUPABASE_ANON_KEY: 'your-anon-key-here',
+    SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4a2VxZnNld2hvdG5iY25maG1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2MTI2MzAsImV4cCI6MjEwMjE4ODYzMH0.8yEsZ0ltoLHoXkhmDdLDHaX7G6D1DoqzLRXyMaVv6Ig',
     
     // Storage bucket 名称
     STORAGE_BUCKET: 'message-attachments',
