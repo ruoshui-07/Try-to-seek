@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TryToSeek - 管理面板</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/supabase.js"></script>
+    <script src="js/auth.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 侧边栏 -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div style="display:flex;align-items:center;gap:8px;padding:8px 4px;">
+                    <h2 style="font-size:16px;color:var(--accent);">🔧 管理面板</h2>
+                    <span class="admin-badge">ADMIN</span>
+                </div>
+                <div style="margin-top:12px;">
+                    <select class="user-selector" id="userFilter">
+                        <option value="all">所有用户对话</option>
+                        <option value="unread">仅未读消息</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">用户对话</div>
+                <div class="conversation-list" id="adminConversationList">
+                    <!-- 动态渲染 -->
+                </div>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="user-info" id="adminInfoBtn">
+                    <div class="user-avatar" id="adminAvatar" style="background:var(--accent);">A</div>
+                    <div class="user-details">
+                        <div class="user-name" id="adminName">管理员</div>
+                        <div class="user-email" id="adminEmail"></div>
+                    </div>
+                </div>
+                <div class="user-dropdown" id="adminDropdown">
+                    <div class="dropdown-item" id="backToUser">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        返回用户端
+                    </div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item danger" id="adminLogout">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        退出登录
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <header class="main-header">
+                <div class="header-left">
+                    <button class="sidebar-toggle" id="sidebarToggle">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 6h16M4 12h16M4 18h16" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                    <span class="conversation-title" id="adminConvTitle">选择对话</span>
+                    <span id="unreadBadge" style="display:none;background:var(--accent);color:white;font-size:11px;padding:2px 8px;border-radius:10px;margin-left:8px;">0 未读</span>
+                </div>
+                <div class="header-right">
+                    <button class="header-btn" id="markAllRead" title="全部标为已读">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        全部已读
+                    </button>
+                    <button class="header-btn" id="refreshAdmin" title="刷新">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        刷新
+                    </button>
+                </div>
+            </header>
+
+            <!-- 聊天区域 -->
+            <div class="chat-container" id="adminChatContainer">
+                <div class="welcome-screen" id="adminWelcome">
+                    <div style="font-size:48px;margin-bottom:16px;">🔧</div>
+                    <div class="welcome-title">管理员面板</div>
+                    <div class="welcome-subtitle">
+                        从左侧选择用户的对话来查看和回复。<br>
+                        支持文字、图片、视频和文件回复。<br>
+                        新消息会通过实时推送通知你。
+                    </div>
+                    <div style="margin-top:20px;padding:16px;background:var(--bg-secondary);border-radius:var(--radius);max-width:500px;">
+                        <h3 style="font-size:14px;margin-bottom:8px;color:var(--accent);">📊 实时统计</h3>
+                        <div id="adminStats" style="font-size:13px;color:var(--text-secondary);line-height:2;">
+                            加载中...
+                        </div>
+                    </div>
+                </div>
+
+                <div class="messages-list" id="adminMessagesList" style="display:none;"></div>
+            </div>
+
+            <!-- 状态横幅 -->
+            <div class="status-banner info" id="adminStatusBanner">
+                <span id="adminStatusText"></span>
+            </div>
+
+            <!-- 输入区域 -->
+            <div class="input-area" id="adminInputArea" style="display:none;">
+                <div class="input-container">
+                    <div class="input-wrapper">
+                        <div class="input-actions-left">
+                            <button class="input-action-btn" id="adminUploadImage" title="上传图片回复">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                <input type="file" id="adminImageInput" accept="image/*" multiple style="display:none;">
+                            </button>
+                            <button class="input-action-btn" id="adminUploadFile" title="上传文件回复">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                <input type="file" id="adminFileInput" multiple style="display:none;">
+                            </button>
+                        </div>
+                        <textarea 
+                            class="message-input" 
+                            id="adminMessageInput" 
+                            placeholder="输入回复..."
+                            rows="1"
+                        ></textarea>
+                        <button class="send-btn" id="adminSendBtn" title="发送回复">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 19V5m0 0l-7 7m7-7l7 7" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="input-footer">
+                        你正在以管理员身份回复 · 输入时自动保存草稿
+                    </div>
+                </div>
+            </div>
+
+            <!-- 上传预览 -->
+            <div class="upload-preview" id="adminUploadPreview"></div>
+        </main>
+    </div>
+
+    <!-- 图片预览模态框 -->
+    <div class="image-modal" id="adminMediaModal">
+        <button class="image-modal-close" id="adminModalClose">&times;</button>
+        <div id="adminModalContent"></div>
+    </div>
+
+    <!-- Toast 容器 -->
+    <div class="toast-container" id="adminToastContainer"></div>
+
+    <!-- 管理员逻辑 -->
+    <script src="js/admin.js"></script>
+</body>
+</html>

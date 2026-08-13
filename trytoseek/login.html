@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TryToSeek - 登录</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/supabase.js"></script>
+    <script src="js/auth.js"></script>
+</head>
+<body class="auth-body">
+    <div class="auth-container">
+        <div class="auth-card">
+            <div class="auth-header">
+                <h1 class="auth-logo">TryToSeek</h1>
+                <p class="auth-tagline">一个真人在另一端的聊天体验</p>
+            </div>
+
+            <!-- 登录表单 -->
+            <div class="auth-form" id="loginForm">
+                <h2>登录</h2>
+                <div class="form-group">
+                    <label for="loginEmail">邮箱</label>
+                    <input type="email" id="loginEmail" placeholder="your@email.com" autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">密码</label>
+                    <input type="password" id="loginPassword" placeholder="输入密码" autocomplete="current-password">
+                </div>
+                <div class="form-options">
+                    <label class="remember-me">
+                        <input type="checkbox" id="rememberMe" checked> 记住我
+                    </label>
+                    <a href="#" class="forgot-password" id="forgotLink">忘记密码？</a>
+                </div>
+                <button class="btn-primary" id="loginBtn">登录</button>
+                <div class="auth-divider"><span>或</span></div>
+                <button class="btn-secondary" id="showSignUp">创建新账号</button>
+                <div class="auth-message" id="loginMessage"></div>
+            </div>
+
+            <!-- 注册表单 -->
+            <div class="auth-form hidden" id="signUpForm">
+                <h2>注册</h2>
+                <div class="form-group">
+                    <label for="signUpName">昵称（可选）</label>
+                    <input type="text" id="signUpName" placeholder="给自己起个名字">
+                </div>
+                <div class="form-group">
+                    <label for="signUpEmail">邮箱</label>
+                    <input type="email" id="signUpEmail" placeholder="your@email.com" autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label for="signUpPassword">密码</label>
+                    <input type="password" id="signUpPassword" placeholder="至少6位密码" autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label for="signUpConfirm">确认密码</label>
+                    <input type="password" id="signUpConfirm" placeholder="再次输入密码" autocomplete="new-password">
+                </div>
+                <button class="btn-primary" id="signUpBtn">注册</button>
+                <div class="auth-divider"><span>或</span></div>
+                <button class="btn-secondary" id="showLogin">返回登录</button>
+                <div class="auth-message" id="signUpMessage"></div>
+            </div>
+
+            <!-- 重置密码表单 -->
+            <div class="auth-form hidden" id="resetForm">
+                <h2>重置密码</h2>
+                <p class="auth-description">输入你的邮箱，我们将发送重置链接</p>
+                <div class="form-group">
+                    <label for="resetEmail">邮箱</label>
+                    <input type="email" id="resetEmail" placeholder="your@email.com">
+                </div>
+                <button class="btn-primary" id="resetBtn">发送重置邮件</button>
+                <div class="auth-divider"><span>或</span></div>
+                <button class="btn-secondary" id="backToLogin">返回登录</button>
+                <div class="auth-message" id="resetMessage"></div>
+            </div>
+        </div>
+
+        <div class="auth-footer">
+            <p>© 2026 TryToSeek. 由真人驱动的聊天体验。</p>
+        </div>
+    </div>
+
+    <script>
+        // DOM 元素
+        const loginForm = document.getElementById('loginForm');
+        const signUpForm = document.getElementById('signUpForm');
+        const resetForm = document.getElementById('resetForm');
+
+        // 切换表单
+        document.getElementById('showSignUp').addEventListener('click', () => {
+            loginForm.classList.add('hidden');
+            signUpForm.classList.remove('hidden');
+            resetForm.classList.add('hidden');
+        });
+
+        document.getElementById('showLogin').addEventListener('click', () => {
+            loginForm.classList.remove('hidden');
+            signUpForm.classList.add('hidden');
+            resetForm.classList.add('hidden');
+        });
+
+        document.getElementById('forgotLink').addEventListener('click', (e) => {
+            e.preventDefault();
+            loginForm.classList.add('hidden');
+            signUpForm.classList.add('hidden');
+            resetForm.classList.remove('hidden');
+        });
+
+        document.getElementById('backToLogin').addEventListener('click', () => {
+            loginForm.classList.remove('hidden');
+            signUpForm.classList.add('hidden');
+            resetForm.classList.add('hidden');
+        });
+
+        // 显示消息
+        function showMessage(elementId, message, type = 'error') {
+            const el = document.getElementById(elementId);
+            el.textContent = message;
+            el.className = `auth-message ${type}`;
+            el.style.display = 'block';
+            setTimeout(() => { el.style.display = 'none'; }, 5000);
+        }
+
+        // 登录
+        document.getElementById('loginBtn').addEventListener('click', async () => {
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const btn = document.getElementById('loginBtn');
+
+            if (!email || !password) {
+                showMessage('loginMessage', '请输入邮箱和密码');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = '登录中...';
+
+            try {
+                await Auth.signIn(email, password);
+                // 检查是否是管理员
+                const admin = await window.TryToSeek.isAdmin();
+                window.location.href = admin ? 'admin.html' : 'index.html';
+            } catch (error) {
+                showMessage('loginMessage', error.message || '登录失败');
+                btn.disabled = false;
+                btn.textContent = '登录';
+            }
+        });
+
+        // 注册
+        document.getElementById('signUpBtn').addEventListener('click', async () => {
+            const name = document.getElementById('signUpName').value.trim();
+            const email = document.getElementById('signUpEmail').value.trim();
+            const password = document.getElementById('signUpPassword').value;
+            const confirm = document.getElementById('signUpConfirm').value;
+            const btn = document.getElementById('signUpBtn');
+
+            if (!email || !password) {
+                showMessage('signUpMessage', '请输入邮箱和密码');
+                return;
+            }
+
+            if (password.length < 6) {
+                showMessage('signUpMessage', '密码至少需要6位');
+                return;
+            }
+
+            if (password !== confirm) {
+                showMessage('signUpMessage', '两次输入的密码不一致');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = '注册中...';
+
+            try {
+                await Auth.signUp(email, password, name);
+                showMessage('signUpMessage', '注册成功！请检查邮箱完成验证。', 'success');
+                setTimeout(() => {
+                    loginForm.classList.remove('hidden');
+                    signUpForm.classList.add('hidden');
+                    document.getElementById('loginEmail').value = email;
+                }, 2000);
+            } catch (error) {
+                showMessage('signUpMessage', error.message || '注册失败');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '注册';
+            }
+        });
+
+        // 重置密码
+        document.getElementById('resetBtn').addEventListener('click', async () => {
+            const email = document.getElementById('resetEmail').value.trim();
+            const btn = document.getElementById('resetBtn');
+
+            if (!email) {
+                showMessage('resetMessage', '请输入邮箱');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = '发送中...';
+
+            try {
+                await Auth.resetPassword(email);
+                showMessage('resetMessage', '重置邮件已发送，请检查邮箱', 'success');
+            } catch (error) {
+                showMessage('resetMessage', error.message || '发送失败');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '发送重置邮件';
+            }
+        });
+
+        // 回车提交
+        document.getElementById('loginPassword').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') document.getElementById('loginBtn').click();
+        });
+
+        // 检查是否已登录
+        window.addEventListener('auth:ready', (e) => {
+            if (e.detail.session) {
+                window.location.href = 'index.html';
+            }
+        });
+    </script>
+</body>
+</html>
