@@ -15,7 +15,7 @@ const TRYTOSEEK_CONFIG = {
     SUPABASE_URL: 'https://your-project-ref.supabase.co',
     
     // Supabase Anon (public) Key
-    SUPABASE_ANON_KEY: 'your-anon-key-here',
+    SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4a2VxZnNld2hvdG5iY25maG1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2MTI2MzAsImV4cCI6MjEwMjE4ODYzMH0.8yEsZ0ltoLHoXkhmDdLDHaX7G6D1DoqzLRXyMaVv6Ig',
     
     // Storage bucket 名称
     STORAGE_BUCKET: 'message-attachments',
@@ -23,7 +23,7 @@ const TRYTOSEEK_CONFIG = {
     // 应用配置
     APP: {
         NAME: 'TryToSeek',
-        TAGLINE: '一个真人在另一端的聊天体验',
+        TAGLINE: 'AI* = Average Individual',
         
         // 轮询间隔（毫秒）
         POLL_INTERVAL: 8000,
