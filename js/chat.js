@@ -68,6 +68,14 @@
     };
 
     // ============================================
+    // 【新增】安全垫：防止 clearUploadPreview 未定义
+    // ============================================
+    function clearUploadPreview() {
+        // 这是一个空函数，确保任何地方调用都不会报错
+        // 实际的清理逻辑由 renderUploadPreview 基于 State.pendingFiles 长度自动处理
+    }
+
+    // ============================================
     // 初始化
     // ============================================
     async function init() {
@@ -542,14 +550,8 @@
     // 发送消息
     // ============================================
    async function sendMessage() {
-    // ✅ 1. 在 sendMessage 函数内部最上方，添加这个函数定义
-    function clearUploadPreview() {
-        // 什么都不做，只是为了不让代码报错
-        // 后续如果需要清理预览，可在这里添加逻辑
-    }
-
-    // ✅ 2. 删除或注释掉下面这行（如果它存在）
-    // clearUploadPreview(); // ← 删除或注释掉这一行！
+    // 注意：clearUploadPreview 已在 IIFE 顶部定义为空函数，无需再次定义
+    // 确保没有调用 clearUploadPreview()
 
     const text = DOM.messageInput.value.trim();
     const hasFiles = State.pendingFiles.length > 0;
@@ -559,9 +561,9 @@
         await createNewConversation();
     }
 
-    // ✅ 3. 确保 State.pendingFiles 被正确清空
+    // 复制待发送文件列表并清空
     const filesToSend = [...State.pendingFiles];
-    State.pendingFiles = []; // ← 这行是关键！它会触发 renderUploadPreview 清空预览
+    State.pendingFiles = []; // 这会触发 renderUploadPreview 清空预览
 
     // 清空输入框
     DOM.messageInput.value = '';
