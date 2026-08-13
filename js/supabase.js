@@ -20,8 +20,8 @@ const SUPABASE_ANON_KEY = (typeof TRYTOSEEK_CONFIG !== 'undefined')
     ? TRYTOSEEK_CONFIG.SUPABASE_ANON_KEY
     : 'YOUR_SUPABASE_ANON_KEY_HERE';
 
-// 创建 Supabase 客户端
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+// 创建 Supabase 客户端（不再声明全局 supabase）
+const _supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
         persistSession: true,
         autoRefreshToken: true,
@@ -100,7 +100,7 @@ function validateFile(file) {
     // 2. 检查 MIME 类型
     if (!ALLOWED_MIME_TYPES.includes(file.type)) {
         return {
-            valid: boolean = false,
+            valid: false,   // 修复：去掉多余的 "boolean = "
             error: `文件 "${file.name}" 类型不支持（${file.type || '未知类型'}），仅允许图片、视频、音频、PDF 和文档`
         };
     }
@@ -123,7 +123,7 @@ async function uploadFile(path, file) {
 
     // 2. 上传到 Supabase Storage
     //    同时传递 size 参数作为第二道防线（Supabase 会拒绝超过此大小的文件）
-    const { data, error } = await supabase.storage
+    const { data, error } = await _supabaseClient.storage   // 注意这里也要改
         .from(STORAGE_BUCKET)
         .upload(path, file, {
             cacheControl: '3600',
@@ -141,7 +141,7 @@ async function uploadFile(path, file) {
     }
 
     // 3. 获取公开 URL
-    const { data: urlData } = supabase.storage
+    const { data: urlData } = _supabaseClient.storage   // 注意这里也要改
         .from(STORAGE_BUCKET)
         .getPublicUrl(data.path);
 
@@ -156,7 +156,7 @@ async function uploadFile(path, file) {
  * @param {string} path - 文件路径
  */
 async function deleteFile(path) {
-    const { error } = await supabase.storage
+    const { error } = await _supabaseClient.storage   // 注意这里也要改
         .from(STORAGE_BUCKET)
         .remove([path]);
     
@@ -198,10 +198,10 @@ function isVideo(mimeType) {
 // 工具函数：检查当前用户是否为管理员
 // ============================================================
 async function isAdmin() {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await _supabaseClient.auth.getUser();   // 注意这里也要改
     if (!user) return false;
     
-    const { data: profile } = await supabase
+    const { data: profile } = await _supabaseClient   // 注意这里也要改
         .from('profiles')
         .select('is_admin')
         .eq('id', user.id)
@@ -214,10 +214,10 @@ async function isAdmin() {
 // 工具函数：获取当前用户信息
 // ============================================================
 async function getCurrentUser() {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await _supabaseClient.auth.getUser();   // 注意这里也要改
     if (!user) return null;
     
-    const { data: profile } = await supabase
+    const { data: profile } = await _supabaseClient   // 注意这里也要改
         .from('profiles')
         .select('*')
         .eq('id', user.id)
@@ -274,7 +274,7 @@ function generateTitle(content) {
 // 导出到全局
 // ============================================================
 window.TryToSeek = {
-    supabase,
+    supabase: _supabaseClient,   // 这里用 _supabaseClient 赋值
     isAdmin,
     getCurrentUser,
     formatTime,
