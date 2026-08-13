@@ -576,6 +576,7 @@
             await insertMessage({
                 conversation_id: State.currentConversationId,
                 sender_type: 'user',
+                sender_id: State.currentUser.id,  // 🔥 关键修复：加上 sender_id
                 content_type: 'text',
                 content: text
             });
@@ -598,6 +599,7 @@
             await insertMessage({
                 conversation_id: State.currentConversationId,
                 sender_type: 'user',
+                sender_id: State.currentUser.id,  // 🔥 关键修复：加上 sender_id
                 content_type: contentType,
                 content: url,
                 file_name: file.name,
