@@ -541,76 +541,85 @@
     // ============================================
     // 发送消息
     // ============================================
-    async function sendMessage() {
-        const text = DOM.messageInput.value.trim();
-        const hasFiles = State.pendingFiles.length > 0;
-
-        if (!text && !hasFiles) return;
-        if (!State.currentConversationId) {
-            await createNewConversation();
-        }
-
-        const filesToSend = [...State.pendingFiles];
-        State.pendingFiles = [];
-        // clearUploadPreview();  // 已删除此行，避免未定义函数错误
-
-        // 清空输入框
-        DOM.messageInput.value = '';
-        autoResizeTextarea();
-        saveDraft();
-
-        try {
-            // 如果有文字，先发送文字消息
-            if (text) {
-                await insertMessage({
-                    conversation_id: State.currentConversationId,
-                    sender_type: 'user',
-                    content_type: 'text',
-                    content: text
-                });
-
-                // 更新对话标题（如果是第一条消息）
-                const conv = State.conversations.find(c => c.id === State.currentConversationId);
-                if (conv && conv.title === '新对话') {
-                    const title = window.TryToSeek.generateTitle(text);
-                    await updateConversationTitle(State.currentConversationId, title);
-                }
-            }
-
-            // 发送文件
-            for (const fileData of filesToSend) {
-                const { file, url } = fileData;
-                const contentType = file.type.startsWith('image/') ? 'image' 
-                                 : file.type.startsWith('video/') ? 'video' 
-                                 : 'file';
-
-                await insertMessage({
-                    conversation_id: State.currentConversationId,
-                    sender_type: 'user',
-                    content_type: contentType,
-                    content: url,
-                    file_name: file.name,
-                    file_size: file.size,
-                    file_mime_type: file.type
-                });
-            }
-
-            // 重新加载消息
-            await loadMessages(State.currentConversationId);
-            
-            // 更新对话列表
-            await loadConversations();
-
-            // 显示等待提示
-            showStatusBanner('info', '✉️ 消息已发送，管理员会在看到后回复你');
-            setTimeout(hideStatusBanner, 5000);
-
-        } catch (error) {
-            console.error('发送失败:', error);
-            showToast('发送失败: ' + error.message, 'error');
-        }
+   async function sendMessage() {
+    // ✅ 1. 在 sendMessage 函数内部最上方，添加这个函数定义
+    function clearUploadPreview() {
+        // 什么都不做，只是为了不让代码报错
+        // 后续如果需要清理预览，可在这里添加逻辑
     }
 
+    // ✅ 2. 删除或注释掉下面这行（如果它存在）
+    // clearUploadPreview(); // ← 删除或注释掉这一行！
+
+    const text = DOM.messageInput.value.trim();
+    const hasFiles = State.pendingFiles.length > 0;
+
+    if (!text && !hasFiles) return;
+    if (!State.currentConversationId) {
+        await createNewConversation();
+    }
+
+    // ✅ 3. 确保 State.pendingFiles 被正确清空
+    const filesToSend = [...State.pendingFiles];
+    State.pendingFiles = []; // ← 这行是关键！它会触发 renderUploadPreview 清空预览
+
+    // 清空输入框
+    DOM.messageInput.value = '';
+    autoResizeTextarea();
+    saveDraft();
+
+    try {
+        // 如果有文字，先发送文字消息
+        if (text) {
+            await insertMessage({
+                conversation_id: State.currentConversationId,
+                sender_type: 'user',
+                content_type: 'text',
+                content: text
+            });
+
+            // 更新对话标题（如果是第一条消息）
+            const conv = State.conversations.find(c => c.id === State.currentConversationId);
+            if (conv && conv.title === '新对话') {
+                const title = window.TryToSeek.generateTitle(text);
+                await updateConversationTitle(State.currentConversationId, title);
+            }
+        }
+
+        // 发送文件
+        for (const fileData of filesToSend) {
+            const { file, url } = fileData;
+            const contentType = file.type.startsWith('image/') ? 'image' 
+                               : file.type.startsWith('video/') ? 'video' 
+                               : 'file';
+
+            await insertMessage({
+                conversation_id: State.currentConversationId,
+                sender_type: 'user',
+                content_type: contentType,
+                content: url,
+                file_name: file.name,
+                file_size: file.size,
+                file_mime_type: file.type
+            });
+        }
+
+        // 重新加载消息
+        await loadMessages(State.currentConversationId);
+        
+        // 更新对话列表
+        await loadConversations();
+
+        // 显示等待提示
+        showStatusBanner('info', '✉️ 消息已发送，管理员会在看到后回复你');
+        setTimeout(hideStatusBanner, 5000);
+
+    } catch (error) {
+        console.error('发送失败:', error);
+        showToast('发送失败: ' + error.message, 'error');
+    }
+}
+    
     async function insertMessage(msgData) {
         const { error } = await window.TryToSeek.supabase
             .from('messages')
