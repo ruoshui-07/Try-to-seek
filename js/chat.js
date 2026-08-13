@@ -75,7 +75,7 @@
     }
 
     // ============================================
-    // 初始化
+    // 初始化（⭐ 修改点1：不自动打开对话）
     // ============================================
     async function init() {
         await waitForAuth();
@@ -91,14 +91,24 @@
         initUI();
         initEventListeners();
 
+        // 加载对话列表（仅用于左侧显示，不自动跳转）
         await loadConversations();
 
-        if (State.conversations.length > 0) {
-            openConversation(State.conversations[0].id);
-        } else {
-            await createNewConversation();
-        }
+        // ⭐ 修改：不再自动打开第一个对话，保持欢迎页显示
+        // 原来代码：
+        // if (State.conversations.length > 0) {
+        //     openConversation(State.conversations[0].id);
+        // } else {
+        //     await createNewConversation();
+        // }
+        // 改为：
+        // 保持 welcomeScreen 显示，messagesList 隐藏
+        DOM.welcomeScreen.style.display = 'flex'; // 确保欢迎页可见
+        DOM.messagesList.style.display = 'none';
+        DOM.messageInput.disabled = false;        // 输入框可用
+        DOM.sendBtn.disabled = false;              // 发送按钮可用
 
+        // 启动实时监听和轮询（但轮询内部会判断 currentConversationId，不会误操作）
         startRealtimeSubscription();
         startPolling();
         checkUrlParams();
@@ -338,76 +348,76 @@
     // 消息管理（核心修改：冻结滚动 + 增量追加）
     // ============================================
     async function loadMessages(conversationId, isRefresh = false) {
-    if (State.isLoading) return;
-    State.isLoading = true;
+        if (State.isLoading) return;
+        State.isLoading = true;
 
-    const chatContainer = DOM.chatContainer;
-    const messagesList = DOM.messagesList;
+        const chatContainer = DOM.chatContainer;
+        const messagesList = DOM.messagesList;
 
-    // ✨ 1. 固定容器高度，防止高度变化引起的闪烁
-    const containerHeight = chatContainer.offsetHeight;
-    if (containerHeight > 0) {
-        chatContainer.style.minHeight = containerHeight + 'px';
-    }
+        // ✨ 1. 固定容器高度，防止高度变化引起的闪烁
+        const containerHeight = chatContainer.offsetHeight;
+        if (containerHeight > 0) {
+            chatContainer.style.minHeight = containerHeight + 'px';
+        }
 
-    // ✨ 2. 隐藏消息列表（保留占位）
-    messagesList.style.visibility = 'hidden';
+        // ✨ 2. 隐藏消息列表（保留占位）
+        messagesList.style.visibility = 'hidden';
 
-    // ✨ 3. 冻结滚动位置
-    const prevScrollTop = chatContainer.scrollTop;
-    const prevScrollHeight = chatContainer.scrollHeight;
+        // ✨ 3. 冻结滚动位置
+        const prevScrollTop = chatContainer.scrollTop;
+        const prevScrollHeight = chatContainer.scrollHeight;
 
-    try {
-        const { data, error } = await window.TryToSeek.supabase
-            .from('messages')
-            .select('*')
-            .eq('conversation_id', conversationId)
-            .order('created_at', { ascending: true });
+        try {
+            const { data, error } = await window.TryToSeek.supabase
+                .from('messages')
+                .select('*')
+                .eq('conversation_id', conversationId)
+                .order('created_at', { ascending: true });
 
-        if (error) throw error;
+            if (error) throw error;
 
-        const oldCount = State.messages.length;
-        const newCount = (data || []).length;
-        const hasNewMessages = newCount > oldCount;
+            const oldCount = State.messages.length;
+            const newCount = (data || []).length;
+            const hasNewMessages = newCount > oldCount;
 
-        // 如果是轮询刷新且有新消息，使用增量追加
-        if (isRefresh && hasNewMessages && oldCount > 0) {
-            const newMsgs = data.slice(oldCount);
-            State.messages = data || [];
-            appendNewMessages(newMsgs);
+            // 如果是轮询刷新且有新消息，使用增量追加
+            if (isRefresh && hasNewMessages && oldCount > 0) {
+                const newMsgs = data.slice(oldCount);
+                State.messages = data || [];
+                appendNewMessages(newMsgs);
 
-            const hasAdminReply = newMsgs.some(m => m.sender_type === 'admin');
-            if (hasAdminReply && !State.isTyping) {
-                showToast('收到新回复！', 'success');
-                playNotificationSound();
+                const hasAdminReply = newMsgs.some(m => m.sender_type === 'admin');
+                if (hasAdminReply && !State.isTyping) {
+                    showToast('收到新回复！', 'success');
+                    playNotificationSound();
+                }
+            } else {
+                // 首次加载或手动刷新，全量渲染
+                State.messages = data || [];
+                renderMessages();
             }
-        } else {
-            // 首次加载或手动刷新，全量渲染
-            State.messages = data || [];
-            renderMessages();
+
+            State.lastMessageCount = State.messages.length;
+            markMessagesAsRead(conversationId);
+
+            // ✨ 4. 恢复滚动位置
+            if (prevScrollTop + chatContainer.clientHeight >= prevScrollHeight - 50) {
+                scrollToBottom();
+            } else {
+                chatContainer.scrollTop = prevScrollTop;
+            }
+
+        } catch (error) {
+            console.error('加载消息失败:', error);
+            if (!isRefresh) showToast('加载消息失败: ' + error.message, 'error');
+        } finally {
+            State.isLoading = false;
+
+            // ✨ 5. 恢复可见并取消固定高度
+            messagesList.style.visibility = 'visible';
+            chatContainer.style.minHeight = '';
         }
-
-        State.lastMessageCount = State.messages.length;
-        markMessagesAsRead(conversationId);
-
-        // ✨ 4. 恢复滚动位置
-        if (prevScrollTop + chatContainer.clientHeight >= prevScrollHeight - 50) {
-            scrollToBottom();
-        } else {
-            chatContainer.scrollTop = prevScrollTop;
-        }
-
-    } catch (error) {
-        console.error('加载消息失败:', error);
-        if (!isRefresh) showToast('加载消息失败: ' + error.message, 'error');
-    } finally {
-        State.isLoading = false;
-
-        // ✨ 5. 恢复可见并取消固定高度
-        messagesList.style.visibility = 'visible';
-        chatContainer.style.minHeight = '';
     }
-}
 
     // ✨ 新增：增量追加新消息到列表末尾
     function appendNewMessages(newMsgs) {
@@ -579,70 +589,99 @@
     }
 
     // ============================================
-    // 发送消息
+    // 发送消息（⭐ 修改点2：首次发送时创建对话并跳转）
     // ============================================
-   async function sendMessage() {
-    const text = DOM.messageInput.value.trim();
-    const hasFiles = State.pendingFiles.length > 0;
+    async function sendMessage() {
+        const text = DOM.messageInput.value.trim();
+        const hasFiles = State.pendingFiles.length > 0;
 
-    if (!text && !hasFiles) return;
-    if (!State.currentConversationId) {
-        await createNewConversation();
-    }
+        if (!text && !hasFiles) return;
 
-    const filesToSend = [...State.pendingFiles];
-    State.pendingFiles = [];
+        // ⭐ 新增：如果没有当前对话，先创建一个新对话并跳转到消息列表
+        if (!State.currentConversationId) {
+            // 先创建一个新对话（使用 createNewConversation 会调用 openConversation，但我们会稍作调整）
+            // 为了避免 createNewConversation 中重复的 openConversation 逻辑，我们在这里直接实现
+            try {
+                const title = text ? text.substring(0, 30) : '新对话';
+                const { data, error } = await window.TryToSeek.supabase
+                    .from('conversations')
+                    .insert({
+                        user_id: State.currentUser.id,
+                        title: title,
+                        status: 'active'
+                    })
+                    .select()
+                    .single();
 
-    DOM.messageInput.value = '';
-    autoResizeTextarea();
-    saveDraft();
+                if (error) throw error;
 
-    try {
-        if (text) {
-            await insertMessage({
-                conversation_id: State.currentConversationId,
-                sender_type: 'user',
-                sender_id: State.currentUser.id,
-                content_type: 'text',
-                content: text
-            });
+                // 添加到对话列表并渲染
+                State.conversations.unshift(data);
+                renderConversationList();
 
-            const conv = State.conversations.find(c => c.id === State.currentConversationId);
-            if (conv && conv.title === '新对话') {
-                const title = window.TryToSeek.generateTitle(text);
-                await updateConversationTitle(State.currentConversationId, title);
+                // 打开这个新对话（隐藏欢迎页，显示消息列表）
+                await openConversation(data.id);
+
+            } catch (error) {
+                console.error('创建对话失败:', error);
+                showToast('创建对话失败: ' + error.message, 'error');
+                return;
             }
         }
 
-        for (const fileData of filesToSend) {
-            const { file, url } = fileData;
-            const contentType = file.type.startsWith('image/') ? 'image' 
-                               : file.type.startsWith('video/') ? 'video' 
-                               : 'file';
+        const filesToSend = [...State.pendingFiles];
+        State.pendingFiles = [];
 
-            await insertMessage({
-                conversation_id: State.currentConversationId,
-                sender_type: 'user',
-                sender_id: State.currentUser.id,
-                content_type: contentType,
-                content: url,
-                file_name: file.name,
-                file_size: file.size,
-                file_mime_type: file.type
-            });
+        DOM.messageInput.value = '';
+        autoResizeTextarea();
+        saveDraft();
+
+        try {
+            if (text) {
+                await insertMessage({
+                    conversation_id: State.currentConversationId,
+                    sender_type: 'user',
+                    sender_id: State.currentUser.id,
+                    content_type: 'text',
+                    content: text
+                });
+
+                const conv = State.conversations.find(c => c.id === State.currentConversationId);
+                if (conv && conv.title === '新对话') {
+                    const title = window.TryToSeek.generateTitle(text);
+                    await updateConversationTitle(State.currentConversationId, title);
+                }
+            }
+
+            for (const fileData of filesToSend) {
+                const { file, url } = fileData;
+                const contentType = file.type.startsWith('image/') ? 'image' 
+                                   : file.type.startsWith('video/') ? 'video' 
+                                   : 'file';
+
+                await insertMessage({
+                    conversation_id: State.currentConversationId,
+                    sender_type: 'user',
+                    sender_id: State.currentUser.id,
+                    content_type: contentType,
+                    content: url,
+                    file_name: file.name,
+                    file_size: file.size,
+                    file_mime_type: file.type
+                });
+            }
+
+            await loadMessages(State.currentConversationId);
+            await loadConversations();
+
+            showStatusBanner('info', '✉️ 消息已发送，管理员会在看到后回复你');
+            setTimeout(hideStatusBanner, 5000);
+
+        } catch (error) {
+            console.error('发送失败:', error);
+            showToast('发送失败: ' + error.message, 'error');
         }
-
-        await loadMessages(State.currentConversationId);
-        await loadConversations();
-
-        showStatusBanner('info', '✉️ 消息已发送，管理员会在看到后回复你');
-        setTimeout(hideStatusBanner, 5000);
-
-    } catch (error) {
-        console.error('发送失败:', error);
-        showToast('发送失败: ' + error.message, 'error');
     }
-}
     
     async function insertMessage(msgData) {
         console.log('准备发送到 Supabase 的数据:', msgData);
