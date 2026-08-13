@@ -611,14 +611,9 @@ input, textarea { font-family: inherit; outline: none; }
 }
 
 /* ---------- 消息列表 ---------- */
-/* ✨ 新增：防闪烁样式 */
 #messagesList {
-    min-height: 180px;                  /* 防止高度塌陷导致的跳动 */
-    transition: opacity 0.15s ease;     /* 0.15秒的透明度过渡 */
-}
-
-#messagesList.loading {
-    opacity: 0.35;                      /* 加载时变淡，不消失 */
+    transition: none !important;
+    animation: none !important;
 }
 
 .messages-list {
