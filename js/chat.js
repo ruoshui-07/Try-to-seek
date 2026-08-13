@@ -376,9 +376,8 @@
     if (State.isLoading) return;
     State.isLoading = true;
 
-    // ✨ 开始加载：将消息列表变淡（直接设置样式，不依赖CSS）
-    DOM.messagesList.style.opacity = '0.1';
-    DOM.messagesList.style.transition = 'opacity 0.6s ease'; // 加个过渡更平滑
+    // ✨ 开始加载前：隐藏消息列表（但保留占位，不引起布局抖动）
+    DOM.messagesList.style.visibility = 'hidden';
 
     try {
         const { data, error } = await window.TryToSeek.supabase
@@ -413,8 +412,8 @@
         if (!isRefresh) showToast('加载消息失败: ' + error.message, 'error');
     } finally {
         State.isLoading = false;
-        // ✨ 加载完成：恢复完全不透明
-        DOM.messagesList.style.opacity = '1';
+        // ✨ 加载完成：恢复可见（瞬间出现，无闪烁）
+        DOM.messagesList.style.visibility = 'visible';
     }
 }
 
