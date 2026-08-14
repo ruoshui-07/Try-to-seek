@@ -29,7 +29,7 @@ const TRYTOSEEK_CONFIG = {
         POLL_INTERVAL: 8000,
         
         // 文件上传限制（字节）
-        MAX_FILE_SIZE: 25 * 1024 * 1024,  // 25MB
+        MAX_FILE_SIZE: 50 * 1024 * 1024,  // 50MB
         
         // 自动刷新间隔
         AUTO_REFRESH: true,
