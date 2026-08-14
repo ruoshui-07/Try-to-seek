@@ -610,6 +610,66 @@ input, textarea { font-family: inherit; outline: none; }
     line-height: 1.5;
 }
 
+/* ---------- 欢迎页：对话可见性选择 ---------- */
+.welcome-visibility {
+    margin-bottom: 32px;
+    width: 100%;
+    max-width: 480px;
+}
+
+.welcome-visibility-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.welcome-visibility-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.visibility-option {
+    padding: 16px 12px;
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-light);
+    border-radius: var(--radius);
+    cursor: pointer;
+    text-align: center;
+    transition: var(--transition);
+    user-select: none;
+}
+
+.visibility-option:hover {
+    border-color: var(--accent);
+    background: var(--bg-hover);
+}
+
+.visibility-option.active {
+    border-color: var(--accent);
+    background: var(--bg-hover);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+.visibility-option-icon {
+    font-size: 24px;
+    margin-bottom: 6px;
+}
+
+.visibility-option-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.visibility-option-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
 /* ---------- 消息列表 ---------- */
 #messagesList {
     transition: none !important;

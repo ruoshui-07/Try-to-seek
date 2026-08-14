@@ -24,6 +24,7 @@
         isTyping: false,
         draftContent: '',
         pendingFiles: [],
+        pendingVisibility: 'private',  // 新建对话的可见性，仅在欢迎页可改
         isLoading: false,
         lastMessageCount: 0,
         pollInterval: null,
@@ -91,9 +92,6 @@
         initUI();
         initEventListeners();
 
-        // 动态创建可见性切换按钮
-        createVisibilityToggle();
-
         await loadConversations();
 
         DOM.welcomeScreen.style.display = 'flex';
@@ -142,27 +140,6 @@
         if (savedDraft) {
             DOM.messageInput.value = savedDraft;
             autoResizeTextarea();
-        }
-    }
-
-    // ✨ 创建可见性切换按钮
-    function createVisibilityToggle() {
-        if (document.getElementById('visibilityToggle')) return;
-
-        const toggleContainer = document.createElement('div');
-        toggleContainer.id = 'visibilityToggle';
-        toggleContainer.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 12px;font-size:12px;background:var(--bg-secondary);border-radius:8px;margin-bottom:4px;';
-
-        toggleContainer.innerHTML = `
-            <label style="cursor:pointer;display:flex;align-items:center;gap:4px;">
-                <input type="checkbox" id="publicCheckbox" style="accent-color:var(--accent);">
-                🌍 公开对话（所有人可见）
-            </label>
-        `;
-
-        const inputArea = document.querySelector('.input-area');
-        if (inputArea) {
-            inputArea.parentNode.insertBefore(toggleContainer, inputArea);
         }
     }
 
@@ -221,6 +198,15 @@
         DOM.modalClose.addEventListener('click', closeMediaModal);
         DOM.mediaModal.addEventListener('click', (e) => {
             if (e.target === DOM.mediaModal) closeMediaModal();
+        });
+
+        // 欢迎页可见性选择
+        document.querySelectorAll('.visibility-option').forEach(opt => {
+            opt.addEventListener('click', () => {
+                document.querySelectorAll('.visibility-option').forEach(o => o.classList.remove('active'));
+                opt.classList.add('active');
+                State.pendingVisibility = opt.dataset.visibility;
+            });
         });
 
         document.addEventListener('keydown', (e) => {
@@ -317,29 +303,30 @@
         }).join('');
     }
 
-    async function createNewConversation() {
-        try {
-            const { data, error } = await window.TryToSeek.supabase
-                .from('conversations')
-                .insert({
-                    user_id: State.currentUser.id,
-                    title: '新对话',
-                    status: 'active',
-                    visibility: 'private'
-                })
-                .select()
-                .single();
+    // 新建对话：回到欢迎页让用户选可见性，发送第一条消息时才真正创建对话
+    function createNewConversation() {
+        State.currentConversationId = null;
+        State.messages = [];
 
-            if (error) throw error;
+        // 重置可见性为默认（私密）
+        State.pendingVisibility = 'private';
+        document.querySelectorAll('.visibility-option').forEach(o => {
+            o.classList.toggle('active', o.dataset.visibility === 'private');
+        });
 
-            State.conversations.unshift(data);
-            renderConversationList();
-            openConversation(data.id);
-            showToast('新对话已创建', 'success');
-        } catch (error) {
-            console.error('创建对话失败:', error);
-            showToast('创建对话失败: ' + error.message, 'error');
-        }
+        // 取消左侧栏的选中状态
+        document.querySelectorAll('.conversation-item').forEach(el => {
+            el.classList.remove('active');
+        });
+
+        DOM.currentConvTitle.textContent = '新对话';
+        DOM.welcomeScreen.style.display = 'flex';
+        DOM.messagesList.style.display = 'none';
+        DOM.messageInput.disabled = false;
+        DOM.sendBtn.disabled = false;
+        DOM.messageInput.value = '';
+        autoResizeTextarea();
+        DOM.messageInput.focus();
     }
 
     async function openConversation(conversationId) {
@@ -629,9 +616,7 @@
         if (!State.currentConversationId) {
             try {
                 const title = text ? text.substring(0, 30) : '新对话';
-                const checkbox = document.getElementById('publicCheckbox');
-                const isPublic = checkbox ? checkbox.checked : false;
-                const visibility = isPublic ? 'public' : 'private';
+                const visibility = State.pendingVisibility;
 
                 const { data, error } = await window.TryToSeek.supabase
                     .from('conversations')
