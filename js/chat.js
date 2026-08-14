@@ -473,7 +473,7 @@
                     <div class="empty-state-icon">👋</div>
                     发送第一条消息开始对话<br>
                     <small style="margin-top:8px;display:block;color:var(--text-muted);">
-                        管理员会亲自回复你
+                        能工智人会亲自回复你
                     </small>
                 </div>
             `;
@@ -505,13 +505,13 @@
         const time = window.TryToSeek.formatTime(msg.created_at);
 
         // ✨ 昵称逻辑：
-        // - 管理员发的 → 显示"管理员"
+        // - 能工智人发的 → 显示"能工智人"
         // - 自己发的 → 显示"我"
         // - 其他人发的 → 显示 sender_name（数据库里存的昵称）
         let senderName;
         let avatarText;
         if (isAdmin) {
-            senderName = '管理员';
+            senderName = '能工智人';
             avatarText = 'A';
         } else if (isOwn) {
             senderName = '我';
@@ -704,7 +704,7 @@
             await loadMessages(State.currentConversationId);
             await loadConversations();
 
-            showStatusBanner('info', '✉️ 消息已发送，管理员会在看到后回复你');
+            showStatusBanner('info', '✉️ 消息已发送，能工智人会在看到后回复你');
             setTimeout(hideStatusBanner, 5000);
 
         } catch (error) {
@@ -1034,7 +1034,7 @@
                             if (atBottom) scrollToBottom();
 
                             if (payload.new.sender_type === 'admin') {
-                                showToast('📬 管理员回复了你！', 'success');
+                                showToast('📬 能工智人回复了你！', 'success');
                                 playNotificationSound();
                             }
                         }
