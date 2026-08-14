@@ -68,6 +68,11 @@
         modalClose: document.getElementById('modalClose'),
         modalContent: document.getElementById('modalContent'),
         toastContainer: document.getElementById('toastContainer'),
+        confirmModal: document.getElementById('confirmModal'),
+        confirmModalTitle: document.getElementById('confirmModalTitle'),
+        confirmModalMessage: document.getElementById('confirmModalMessage'),
+        confirmModalCancel: document.getElementById('confirmModalCancel'),
+        confirmModalOk: document.getElementById('confirmModalOk'),
     };
 
     // ============================================
@@ -276,28 +281,37 @@
 
         DOM.conversationList.innerHTML = State.conversations.map(conv => {
             const lastMsg = conv.last_message?.[0];
-            const preview = lastMsg 
-                ? (lastMsg.content_type === 'text' 
-                    ? lastMsg.content?.substring(0, 30) 
+            const preview = lastMsg
+                ? (lastMsg.content_type === 'text'
+                    ? lastMsg.content?.substring(0, 30)
                     : `[${getContentTypeLabel(lastMsg.content_type)}]`)
                 : '暂无消息';
-            
+
             const time = lastMsg ? window.TryToSeek.formatTime(lastMsg.created_at) : '';
             const isActive = conv.id === State.currentConversationId;
             const visibilityIcon = conv.visibility === 'public' ? '🌍' : '🔒';
+            const isMine = conv.user_id === State.currentUser.id;
+            const canDelete = isMine && conv.visibility === 'private';
+            const canEdit = isMine;
 
             return `
-                <div class="conversation-item ${isActive ? 'active' : ''}" 
-                     data-id="${conv.id}"
-                     onclick="ChatApp.openConversation('${conv.id}')">
-                    <svg class="conv-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <div class="conversation-item ${isActive ? 'active' : ''}"
+                     data-id="${conv.id}">
+                    <svg class="conv-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         onclick="ChatApp.openConversation('${conv.id}')">
                         <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
-                    <span class="conv-title">
-                        ${escapeHtml(conv.title || '新对话')}
+                    <span class="conv-title" onclick="ChatApp.openConversation('${conv.id}')">
+                        <span class="conv-title-text">${escapeHtml(conv.title || '新对话')}</span>
                         <span style="font-size:12px;margin-left:4px;">${visibilityIcon}</span>
                     </span>
-                    ${time ? `<span style="margin-left:auto;font-size:11px;color:var(--text-muted);white-space:nowrap;">${time}</span>` : ''}
+                    ${time ? `<span style="margin-left:8px;font-size:11px;color:var(--text-muted);white-space:nowrap;" onclick="ChatApp.openConversation('${conv.id}')">${time}</span>` : ''}
+                    ${canEdit ? `
+                        <div class="conv-actions" onclick="event.stopPropagation();">
+                            <button class="conv-edit" title="重命名" onclick="ChatApp.editConversationTitle('${conv.id}')">✏️</button>
+                            ${canDelete ? `<button class="conv-delete" title="删除" onclick="ChatApp.deleteConversation('${conv.id}')">🗑️</button>` : ''}
+                        </div>
+                    ` : ''}
                 </div>
             `;
         }).join('');
@@ -724,7 +738,177 @@
             DOM.currentConvTitle.textContent = title;
         } catch (e) {
             console.warn('更新标题失败:', e);
+            showToast('更新标题失败: ' + e.message, 'error');
         }
+    }
+
+    // ============================================
+    // 编辑对话标题（侧栏点击 ✏️ 触发）
+    // ============================================
+    function editConversationTitle(conversationId) {
+        const conv = State.conversations.find(c => c.id === conversationId);
+        if (!conv) return;
+
+        // 只允许改自己的
+        if (conv.user_id !== State.currentUser.id) {
+            showToast('只能修改自己的对话', 'error');
+            return;
+        }
+
+        const convItemEl = DOM.conversationList.querySelector(
+            `.conversation-item[data-id="${conversationId}"]`
+        );
+        if (!convItemEl) return;
+
+        const titleTextEl = convItemEl.querySelector('.conv-title-text');
+        const visibilityIconEl = convItemEl.querySelector('.conv-title > span:last-child');
+        if (!titleTextEl) return;
+
+        const oldTitle = conv.title || '新对话';
+        const iconHtml = visibilityIconEl ? visibilityIconEl.outerHTML : '';
+
+        // 把标题 span 替换成输入框，emoji 保留在右边（不允许改）
+        const titleSpan = titleTextEl.parentElement; // .conv-title
+        titleSpan.innerHTML = `
+            <input type="text" class="conv-title-edit" value="${escapeHtml(oldTitle).replace(/"/g, '&quot;')}" maxlength="30">
+            <span style="font-size:12px;margin-left:4px;">${iconHtml ? iconHtml.replace(/^<span[^>]*>|<\/span>$/g, '') : (conv.visibility === 'public' ? '🌍' : '🔒')}</span>
+        `;
+
+        const input = titleSpan.querySelector('.conv-title-edit');
+        if (!input) return;
+
+        // 阻止点击输入框时打开对话
+        input.addEventListener('click', (e) => e.stopPropagation());
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+
+        let done = false;
+
+        const submit = async () => {
+            if (done) return;
+            done = true;
+            const newTitle = input.value.trim() || '新对话';
+            if (newTitle === oldTitle) {
+                renderConversationList();
+                return;
+            }
+            try {
+                await updateConversationTitle(conversationId, newTitle);
+                await loadConversations();
+                showToast('标题已更新', 'success');
+            } catch (e) {
+                console.warn('标题更新失败:', e);
+                renderConversationList();
+            }
+        };
+
+        const cancel = () => {
+            if (done) return;
+            done = true;
+            renderConversationList();
+        };
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); submit(); }
+            else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+        });
+        input.addEventListener('blur', () => {
+            setTimeout(() => { if (!done) submit(); }, 150);
+        });
+    }
+
+    // ============================================
+    // 删除对话（私密且自己的才允许）
+    // ============================================
+    async function deleteConversation(conversationId) {
+        const conv = State.conversations.find(c => c.id === conversationId);
+        if (!conv) return;
+
+        if (conv.user_id !== State.currentUser.id) {
+            showToast('只能删除自己的对话', 'error');
+            return;
+        }
+
+        if (conv.visibility === 'public') {
+            showToast('公开对话无法删除', 'error');
+            return;
+        }
+
+        const confirmed = await showConfirmDialog({
+            title: '删除对话',
+            message: `确定要删除对话"${conv.title || '新对话'}"吗？\n此操作无法撤销，所有消息记录都会被清除。`,
+            okText: '删除',
+            okType: 'danger'
+        });
+        if (!confirmed) return;
+
+        try {
+            const { error } = await window.TryToSeek.supabase
+                .from('conversations')
+                .delete()
+                .eq('id', conversationId);
+
+            if (error) throw error;
+
+            State.conversations = State.conversations.filter(c => c.id !== conversationId);
+
+            // 如果删除的是当前对话，回到欢迎页
+            if (State.currentConversationId === conversationId) {
+                State.currentConversationId = null;
+                State.messages = [];
+                DOM.currentConvTitle.textContent = '新对话';
+                DOM.welcomeScreen.style.display = 'flex';
+                DOM.messagesList.style.display = 'none';
+            }
+
+            renderConversationList();
+            showToast('对话已删除', 'success');
+        } catch (e) {
+            console.error('删除失败:', e);
+            showToast('删除失败: ' + e.message, 'error');
+        }
+    }
+
+    // ============================================
+    // 通用确认弹窗 Promise 封装
+    // ============================================
+    function showConfirmDialog({ title, message, okText = '确认', cancelText = '取消', okType = 'primary' }) {
+        return new Promise((resolve) => {
+            if (!DOM.confirmModal) return resolve(false);
+
+            DOM.confirmModalTitle.textContent = title || '确认';
+            DOM.confirmModalMessage.textContent = message || '确定要执行此操作吗？';
+
+            DOM.confirmModalCancel.textContent = cancelText;
+            DOM.confirmModalOk.textContent = okText;
+            DOM.confirmModalOk.className = 'confirm-modal-btn ' + (okType === 'danger' ? 'danger' : 'primary');
+
+            let resolved = false;
+
+            const cleanup = () => {
+                DOM.confirmModal.classList.remove('active');
+                DOM.confirmModalOk.removeEventListener('click', onOk);
+                DOM.confirmModalCancel.removeEventListener('click', onCancel);
+            };
+
+            const onOk = () => {
+                if (resolved) return;
+                resolved = true;
+                cleanup();
+                resolve(true);
+            };
+
+            const onCancel = () => {
+                if (resolved) return;
+                resolved = true;
+                cleanup();
+                resolve(false);
+            };
+
+            DOM.confirmModalOk.addEventListener('click', onOk);
+            DOM.confirmModalCancel.addEventListener('click', onCancel);
+            DOM.confirmModal.classList.add('active');
+        });
     }
 
     // ============================================
@@ -1061,7 +1245,9 @@
         removePendingFile: (index) => {
             State.pendingFiles.splice(index, 1);
             renderUploadPreview();
-        }
+        },
+        editConversationTitle,
+        deleteConversation,
     };
 
     // ============================================
