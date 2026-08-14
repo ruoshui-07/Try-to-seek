@@ -238,7 +238,7 @@
         DOM.infoModalClose.addEventListener('click', closeInfoModal);
         DOM.infoModal.addEventListener('click', (e) => {
             if (e.target === DOM.infoModal) closeInfoModal();
-});
+        });
     }
 
     // ============================================
