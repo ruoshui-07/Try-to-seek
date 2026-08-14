@@ -239,6 +239,32 @@
         window.addEventListener('beforeunload', () => {
             saveDraft();
         });
+
+        // ✨ 注入按钮样式
+        const styleEl = document.createElement('style');
+        styleEl.textContent = `
+            .conv-actions {
+                display: none;
+                gap: 2px;
+                margin-left: 4px;
+            }
+            .conversation-item:hover .conv-actions {
+                display: inline-flex;
+            }
+            .conv-action-btn {
+                background: transparent;
+                border: none;
+                cursor: pointer;
+                font-size: 12px;
+                padding: 2px 4px;
+                border-radius: 4px;
+                line-height: 1;
+            }
+            .conv-action-btn:hover {
+                background: var(--bg-hover, rgba(255,255,255,0.1));
+            }
+        `;
+        document.head.appendChild(styleEl);
     }
 
     // ============================================
@@ -312,6 +338,13 @@
                         <span style="font-size:12px;margin-left:4px;">${visibilityIcon}</span>
                     </span>
                     ${time ? `<span style="margin-left:auto;font-size:11px;color:var(--text-muted);white-space:nowrap;">${time}</span>` : ''}
+                    <!-- ✨ 新增：操作按钮 -->
+                    <span class="conv-actions">
+                        <button class="conv-action-btn" title="重命名"
+                            onclick="event.stopPropagation(); ChatApp.renameConversation('${conv.id}')">✏️</button>
+                        <button class="conv-action-btn" title="删除"
+                            onclick="event.stopPropagation(); ChatApp.deleteConversation('${conv.id}')">🗑️</button>
+                    </span>
                 </div>
             `;
         }).join('');
@@ -339,6 +372,81 @@
         } catch (error) {
             console.error('创建对话失败:', error);
             showToast('创建对话失败: ' + error.message, 'error');
+        }
+    }
+
+    // ✨ 重命名对话
+    async function renameConversation(conversationId) {
+        const conv = State.conversations.find(c => c.id === conversationId);
+        if (!conv) return;
+
+        const newTitle = prompt('输入新的对话名称：', conv.title || '新对话');
+        if (!newTitle || !newTitle.trim()) return;
+        if (newTitle.trim() === conv.title) return;
+
+        try {
+            const { error } = await window.TryToSeek.supabase
+                .from('conversations')
+                .update({ title: newTitle.trim() })
+                .eq('id', conversationId);
+
+            if (error) throw error;
+
+            // 更新本地状态
+            conv.title = newTitle.trim();
+            if (State.currentConversationId === conversationId) {
+                DOM.currentConvTitle.textContent = conv.title;
+            }
+            renderConversationList();
+            showToast('对话已重命名', 'success');
+        } catch (error) {
+            console.error('重命名失败:', error);
+            showToast('重命名失败: ' + error.message, 'error');
+        }
+    }
+
+    // ✨ 删除对话
+    async function deleteConversation(conversationId) {
+        const conv = State.conversations.find(c => c.id === conversationId);
+        if (!conv) return;
+
+        if (!confirm(`确定删除对话「${conv.title || '新对话'}」吗？\n该对话下的所有消息也会一并删除，且不可恢复。`)) {
+            return;
+        }
+
+        try {
+            // 1. 先删消息（如果 messages 表有外键约束 ON DELETE CASCADE 可跳过）
+            await window.TryToSeek.supabase
+                .from('messages')
+                .delete()
+                .eq('conversation_id', conversationId);
+
+            // 2. 再删对话
+            const { error } = await window.TryToSeek.supabase
+                .from('conversations')
+                .delete()
+                .eq('id', conversationId);
+
+            if (error) throw error;
+
+            // 3. 更新本地状态
+            State.conversations = State.conversations.filter(c => c.id !== conversationId);
+
+            // 4. 如果删的是当前打开的对话，重置界面
+            if (State.currentConversationId === conversationId) {
+                State.currentConversationId = null;
+                State.messages = [];
+                DOM.currentConvTitle.textContent = 'TryToSeek';
+                DOM.messagesList.innerHTML = '';
+                DOM.messagesList.style.display = 'none';
+                DOM.welcomeScreen.style.display = 'flex';
+            }
+
+            renderConversationList();
+            showToast('对话已删除', 'success');
+        } catch (error) {
+            console.error('删除失败:', error);
+            showToast('删除失败: ' + error.message, 'error');
         }
     }
 
@@ -1071,6 +1179,8 @@
     // ============================================
     window.ChatApp = {
         openConversation,
+        renameConversation,   // ← 新增
+        deleteConversation,   // ← 新增
         removePendingFile: (index) => {
             State.pendingFiles.splice(index, 1);
             renderUploadPreview();
