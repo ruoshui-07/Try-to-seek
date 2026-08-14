@@ -351,6 +351,9 @@
     if (State.isLoading) return;
     State.isLoading = true;
 
+    // 将 chatContainer 提到 try 外部，确保 finally 中可访问
+    const chatContainer = DOM.chatContainer;
+
     try {
         const { data, error } = await window.TryToSeek.supabase
             .from('messages')
@@ -360,15 +363,14 @@
 
         if (error) throw error;
 
-        // ✨ 轮询且无新消息且非强制刷新 → 直接跳过渲染
+        // 轮询且无新消息且非强制刷新 → 直接跳过渲染
         if (isRefresh && !force && data.length === State.messages.length) {
-            State.messages = data; // 同步状态（如有已读标记变化可在此更新）
+            State.messages = data;
             State.isLoading = false;
             return;
         }
 
         // 有变化 → 固定高度、隐藏、渲染/追加、恢复
-        const chatContainer = DOM.chatContainer;
         const containerHeight = chatContainer.offsetHeight;
         if (containerHeight > 0) {
             chatContainer.style.minHeight = containerHeight + 'px';
@@ -406,7 +408,10 @@
     } finally {
         State.isLoading = false;
         DOM.messagesList.style.visibility = 'visible';
-        chatContainer.style.minHeight = '';
+        // 恢复高度（确保 chatContainer 存在）
+        if (chatContainer) {
+            chatContainer.style.minHeight = '';
+        }
     }
 }
 
