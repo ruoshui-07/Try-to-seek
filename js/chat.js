@@ -175,11 +175,11 @@
         DOM.fileInput.addEventListener('change', (e) => handleFileSelect(e.target.files, 'file'));
 
         DOM.refreshBtn.addEventListener('click', () => {
-            if (State.currentConversationId) {
-                loadMessages(State.currentConversationId, true);
-                showToast('已刷新', 'info');
-            }
-        });
+    if (State.currentConversationId) {
+        loadMessages(State.currentConversationId, true, true); // 强制刷新
+        showToast('已刷新', 'info');
+    }
+});
 
         DOM.userInfoBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -347,77 +347,68 @@
     // ============================================
     // 消息管理（核心修改：冻结滚动 + 增量追加）
     // ============================================
-    async function loadMessages(conversationId, isRefresh = false) {
-        if (State.isLoading) return;
-        State.isLoading = true;
+    async function loadMessages(conversationId, isRefresh = false, force = false) {
+    if (State.isLoading) return;
+    State.isLoading = true;
 
+    try {
+        const { data, error } = await window.TryToSeek.supabase
+            .from('messages')
+            .select('*')
+            .eq('conversation_id', conversationId)
+            .order('created_at', { ascending: true });
+
+        if (error) throw error;
+
+        // ✨ 轮询且无新消息且非强制刷新 → 直接跳过渲染
+        if (isRefresh && !force && data.length === State.messages.length) {
+            State.messages = data; // 同步状态（如有已读标记变化可在此更新）
+            State.isLoading = false;
+            return;
+        }
+
+        // 有变化 → 固定高度、隐藏、渲染/追加、恢复
         const chatContainer = DOM.chatContainer;
-        const messagesList = DOM.messagesList;
-
-        // ✨ 1. 固定容器高度，防止高度变化引起的闪烁
         const containerHeight = chatContainer.offsetHeight;
         if (containerHeight > 0) {
             chatContainer.style.minHeight = containerHeight + 'px';
         }
-
-        // ✨ 2. 隐藏消息列表（保留占位）
-        messagesList.style.visibility = 'hidden';
-
-        // ✨ 3. 冻结滚动位置
+        DOM.messagesList.style.visibility = 'hidden';
         const prevScrollTop = chatContainer.scrollTop;
         const prevScrollHeight = chatContainer.scrollHeight;
 
-        try {
-            const { data, error } = await window.TryToSeek.supabase
-                .from('messages')
-                .select('*')
-                .eq('conversation_id', conversationId)
-                .order('created_at', { ascending: true });
+        const oldCount = State.messages.length;
+        const newCount = data.length;
+        const hasNewMessages = newCount > oldCount;
 
-            if (error) throw error;
-
-            const oldCount = State.messages.length;
-            const newCount = (data || []).length;
-            const hasNewMessages = newCount > oldCount;
-
-            // 如果是轮询刷新且有新消息，使用增量追加
-            if (isRefresh && hasNewMessages && oldCount > 0) {
-                const newMsgs = data.slice(oldCount);
-                State.messages = data || [];
-                appendNewMessages(newMsgs);
-
-                const hasAdminReply = newMsgs.some(m => m.sender_type === 'admin');
-                if (hasAdminReply && !State.isTyping) {
-                    showToast('收到新回复！', 'success');
-                    playNotificationSound();
-                }
-            } else {
-                // 首次加载或手动刷新，全量渲染
-                State.messages = data || [];
-                renderMessages();
-            }
-
-            State.lastMessageCount = State.messages.length;
-            markMessagesAsRead(conversationId);
-
-            // ✨ 4. 恢复滚动位置
-            if (prevScrollTop + chatContainer.clientHeight >= prevScrollHeight - 50) {
-                scrollToBottom();
-            } else {
-                chatContainer.scrollTop = prevScrollTop;
-            }
-
-        } catch (error) {
-            console.error('加载消息失败:', error);
-            if (!isRefresh) showToast('加载消息失败: ' + error.message, 'error');
-        } finally {
-            State.isLoading = false;
-
-            // ✨ 5. 恢复可见并取消固定高度
-            messagesList.style.visibility = 'visible';
-            chatContainer.style.minHeight = '';
+        if (isRefresh && hasNewMessages && oldCount > 0) {
+            const newMsgs = data.slice(oldCount);
+            State.messages = data;
+            appendNewMessages(newMsgs);
+        } else {
+            State.messages = data;
+            renderMessages();
         }
+
+        State.lastMessageCount = State.messages.length;
+        markMessagesAsRead(conversationId);
+
+        // 恢复滚动
+        if (prevScrollTop + chatContainer.clientHeight >= prevScrollHeight - 50) {
+            scrollToBottom();
+        } else {
+            chatContainer.scrollTop = prevScrollTop;
+        }
+
+    } catch (error) {
+        console.error('加载消息失败:', error);
+        if (!isRefresh) showToast('加载消息失败: ' + error.message, 'error');
+    } finally {
+        State.isLoading = false;
+        DOM.messagesList.style.visibility = 'visible';
+        chatContainer.style.minHeight = '';
     }
+}
 
     // ✨ 新增：增量追加新消息到列表末尾
     function appendNewMessages(newMsgs) {
@@ -792,7 +783,8 @@
             }
 
             if (State.currentConversationId && document.visibilityState === 'visible') {
-                await loadMessages(State.currentConversationId, true);
+                await loadMessages(State.currentConversationId, true); // force 默认为 false
+            }
             }
         }, State.pollIntervalMs);
     }
@@ -805,52 +797,62 @@
     }
 
     function startRealtimeSubscription() {
-        if (State.realtimeChannel) {
-            State.realtimeChannel.unsubscribe();
-        }
+    if (State.realtimeChannel) {
+        State.realtimeChannel.unsubscribe();
+    }
 
-        State.realtimeChannel = window.TryToSeek.supabase
-            .channel('messages-changes')
-            .on(
-                'postgres_changes',
-                {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'messages',
-                    filter: `conversation_id=eq.${State.currentConversationId || ''}`
-                },
-                (payload) => {
-                    console.log('[Realtime] 新消息:', payload);
-                    if (payload.new.conversation_id === State.currentConversationId) {
-                        const exists = State.messages.some(m => m.id === payload.new.id);
-                        if (!exists) {
-                            State.messages.push(payload.new);
-                            renderMessages();
-                            if (payload.new.sender_type === 'admin') {
-                                showToast('📬 管理员回复了你！', 'success');
-                                playNotificationSound();
-                            }
+    State.realtimeChannel = window.TryToSeek.supabase
+        .channel('messages-changes')
+        .on(
+            'postgres_changes',
+            {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'messages',
+                filter: `conversation_id=eq.${State.currentConversationId || ''}`
+            },
+            (payload) => {
+                console.log('[Realtime] 新消息:', payload);
+                if (payload.new.conversation_id === State.currentConversationId) {
+                    const exists = State.messages.some(m => m.id === payload.new.id);
+                    if (!exists) {
+                        State.messages.push(payload.new);
+                        
+                        // ✅ 修改点1：改为增量追加（只添加这一条新消息）
+                        appendNewMessages([payload.new]);
+
+                        // ✅ 如果用户当前在底部，自动滚动到底部
+                        const container = DOM.chatContainer;
+                        const atBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 20;
+                        if (atBottom) scrollToBottom();
+
+                        if (payload.new.sender_type === 'admin') {
+                            showToast('📬 管理员回复了你！', 'success');
+                            playNotificationSound();
                         }
                     }
-                    loadConversations();
                 }
-            )
-            .on(
-                'postgres_changes',
-                {
-                    event: 'UPDATE',
-                    schema: 'public',
-                    table: 'messages'
-                },
-                (payload) => {
-                    console.log('[Realtime] 消息更新:', payload);
-                    if (State.currentConversationId) {
-                        loadMessages(State.currentConversationId, true);
-                    }
-                }
-            )
-            .subscribe();
-    }
+                loadConversations();
+            }
+        )
+        .on(
+            'postgres_changes',
+            {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'messages'
+            },
+            (payload) => {
+                console.log('[Realtime] 消息更新:', payload);
+                // ✅ 修改点2：注释掉全量刷新，避免抖动
+                // 如果将来需要更新“已读”状态，可以单独修改对应 DOM 元素，这里暂不处理
+                // if (State.currentConversationId) {
+                //     loadMessages(State.currentConversationId, true);
+                // }
+            }
+        )
+        .subscribe();
+}
 
     // ============================================
     // 标记消息已读
