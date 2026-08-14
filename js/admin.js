@@ -235,15 +235,25 @@
             // 筛选未读
             if (filter === 'unread') {
                 conversations = conversations.filter(conv => {
-                    const unread = conv.messages?.filter(m => 
+                    const unread = conv.messages?.filter(m =>
                         m.sender_type === 'user' && !m.is_read
                     ).length;
                     return unread > 0;
                 });
             }
 
+            // 数据指纹比较：若数据无变化，跳过列表重渲染（避免侧栏抖动）
+            const oldSig = conversationsSignature(State.conversations);
+            const newSig = conversationsSignature(conversations);
+
             State.conversations = conversations;
-            renderConversationList();
+
+            if (oldSig !== newSig) {
+                // 保留侧边栏滚动位置
+                const prevScrollTop = DOM.convList ? DOM.convList.scrollTop : 0;
+                renderConversationList();
+                if (DOM.convList) DOM.convList.scrollTop = prevScrollTop;
+            }
             updateUnreadBadge();
         } catch (error) {
             console.error('加载对话失败:', error);
@@ -353,19 +363,43 @@
 
             if (error) throw error;
 
+            const newMessages = data || [];
             const oldCount = State.messages.length;
-            State.messages = data || [];
+
+            // 数据指纹比较：刷新时若数据无变化，跳过重渲染（避免抖动）
+            const oldSig = messagesSignature(State.messages);
+            const newSig = messagesSignature(newMessages);
+            const hasChanged = oldSig !== newSig;
+
+            State.messages = newMessages;
 
             // 检测新消息
-            if (isRefresh && oldCount > 0 && State.messages.length > oldCount) {
-                const newUserMsgs = State.messages.slice(oldCount)
+            if (isRefresh && oldCount > 0 && newMessages.length > oldCount) {
+                const newUserMsgs = newMessages.slice(oldCount)
                     .filter(m => m.sender_type === 'user');
                 if (newUserMsgs.length > 0) {
                     showToast(`📬 收到 ${newUserMsgs.length} 条新消息`, 'success');
                 }
             }
 
-            renderMessages();
+            // 仅在数据变化时重渲染（避免图片/视频被重建导致的闪烁）
+            if (hasChanged || !isRefresh) {
+                // 保留滚动位置
+                const container = DOM.chatContainer;
+                const prevScrollTop = container ? container.scrollTop : 0;
+                const prevScrollHeight = container ? container.scrollHeight : 0;
+                const atBottom = container
+                    ? prevScrollTop + container.clientHeight >= prevScrollHeight - 50
+                    : true;
+
+                renderMessages();
+
+                if (container) {
+                    container.scrollTop = atBottom
+                        ? container.scrollHeight
+                        : prevScrollTop;
+                }
+            }
 
             // 标记用户消息为已读
             await markConversationAsRead(convId);
@@ -378,6 +412,24 @@
         } finally {
             State.isLoading = false;
         }
+    }
+
+    // 生成消息列表的轻量指纹，用于检测数据是否变化
+    function messagesSignature(msgs) {
+        if (!msgs || msgs.length === 0) return '';
+        return msgs.map(m => `${m.id}:${m.is_read ? 1 : 0}:${m.content || ''}`).join('|');
+    }
+
+    // 生成对话列表的轻量指纹，用于检测数据是否变化
+    function conversationsSignature(convs) {
+        if (!convs || convs.length === 0) return '';
+        return convs.map(c => {
+            const lastMsg = c.last_msg?.[0];
+            const unreadCount = c.messages?.filter(m =>
+                m.sender_type === 'user' && !m.is_read
+            ).length || 0;
+            return `${c.id}:${c.updated_at}:${unreadCount}:${lastMsg?.id || ''}:${lastMsg?.is_read ? 1 : 0}`;
+        }).join('|');
     }
 
     function renderMessages() {
@@ -423,9 +475,9 @@
                 <div class="message-bubble">
                     ${msg.content ? `<p>${escapeHtml(msg.content)}</p>` : ''}
                     <div class="message-attachments">
-                        <img src="${msg.content}" alt="${escapeHtml(msg.file_name || '')}" 
-                             class="attachment-image" data-src="${msg.content}" 
-                             data-type="image" loading="lazy" style="max-width:200px;">
+                        <img src="${msg.content}" alt="${escapeHtml(msg.file_name || '')}"
+                             class="attachment-image" data-src="${msg.content}"
+                             data-type="image" loading="lazy">
                     </div>
                 </div>
             `;
@@ -554,8 +606,10 @@
     // ============================================
     async function handleAdminFileSelect(files) {
         for (const file of files) {
-            if (file.size > 25 * 1024 * 1024) {
-                showToast(`文件 "${file.name}" 超过 25MB 限制`, 'error');
+            const maxSize = TRYTOSEEK_CONFIG.APP.MAX_FILE_SIZE;
+            const maxSizeMB = Math.round(maxSize / 1024 / 1024);
+            if (file.size > maxSize) {
+                showToast(`文件 "${file.name}" 超过 ${maxSizeMB}MB 限制`, 'error');
                 continue;
             }
 
