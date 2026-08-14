@@ -738,44 +738,54 @@
     // ============================================
     // 文件上传（★ 硬编码存储桶名称，避免变量丢失）
     // ============================================
-    async function handleFileSelect(files, type) {
-        for (const file of files) {
-            if (file.size > 25 * 1024 * 1024) {
-                showToast(`文件 "${file.name}" 超过 25MB 限制`, 'error');
-                continue;
-            }
-
-            try {
-                showToast(`正在上传 ${file.name}...`, 'info');
-
-                // ★★★ 直接写死存储桶名称，杜绝一切变量读取错误 ★★★
-                const BUCKET_NAME = 'message-attachments';
-                const fileExt = file.name.split('.').pop();
-                const fileName = `${State.currentUser.id}/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
-
-                const { data, error } = await window.TryToSeek.supabase.storage
-                    .from(BUCKET_NAME)
-                    .upload(fileName, file, {
-                        cacheControl: '3600',
-                        upsert: false
-                    });
-
-                if (error) throw error;
-
-                const { data: urlData } = window.TryToSeek.supabase.storage
-                    .from(BUCKET_NAME)
-                    .getPublicUrl(fileName);
-
-                const fileUrl = urlData.publicUrl;
-
-                State.pendingFiles.push({ file, url: fileUrl });
-
-                showToast(`✓ ${file.name} 已准备好发送`, 'success');
-            } catch (error) {
-                console.error('上传失败:', error);
-                showToast(`上传失败: ${error.message}`, 'error');
-            }
+    // ============================================
+// 文件上传
+// ============================================
+async function handleFileSelect(files, type) {
+    // 强制使用正确的 Bucket 名称，防止变量读取失败
+    const BUCKET_NAME = 'message-attachments'; 
+    
+    for (const file of files) {
+        if (file.size > 25 * 1024 * 1024) {
+            showToast(`文件 "${file.name}" 超过 25MB 限制`, 'error');
+            continue;
         }
+
+        try {
+            showToast(`正在上传 ${file.name}...`, 'info');
+
+            // 【修改点】：直接使用写死的 BUCKET_NAME
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${State.currentUser.id}/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+
+            const { data, error } = await window.TryToSeek.supabase.storage
+                .from(BUCKET_NAME) // 【修改点】：这里使用写死的值
+                .upload(fileName, file, {
+                    cacheControl: '3600',
+                    upsert: false
+                });
+
+            if (error) throw error;
+
+            const { data: urlData } = window.TryToSeek.supabase.storage
+                .from(BUCKET_NAME) // 【修改点】：这里也使用写死的值
+                .getPublicUrl(fileName);
+
+            const fileUrl = urlData.publicUrl;
+
+            State.pendingFiles.push({ file, url: fileUrl });
+
+            showToast(`✓ ${file.name} 已准备好发送`, 'success');
+        } catch (error) {
+            console.error('上传失败:', error);
+            showToast(`上传失败: ${error.message}`, 'error');
+        }
+    }
+
+    renderUploadPreview();
+    DOM.imageInput.value = '';
+    DOM.fileInput.value = '';
+}
 
         renderUploadPreview();
         DOM.imageInput.value = '';
