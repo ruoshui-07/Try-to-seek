@@ -73,6 +73,9 @@
         confirmModalMessage: document.getElementById('confirmModalMessage'),
         confirmModalCancel: document.getElementById('confirmModalCancel'),
         confirmModalOk: document.getElementById('confirmModalOk'),
+        infoModal: document.getElementById('infoModal'),
+        infoModalClose: document.getElementById('infoModalClose'),
+        infoBtn: document.getElementById('infoBtn'),
     };
 
     // ============================================
@@ -228,8 +231,14 @@
         });
 
         window.addEventListener('beforeunload', () => {
-            saveDraft();
+            saveDraft(); 
         });
+        // ★ 新增：信息弹窗事件
+        DOM.infoBtn.addEventListener('click', openInfoModal);
+        DOM.infoModalClose.addEventListener('click', closeInfoModal);
+        DOM.infoModal.addEventListener('click', (e) => {
+            if (e.target === DOM.infoModal) closeInfoModal();
+});
     }
 
     // ============================================
@@ -1160,6 +1169,14 @@
     function closeMediaModal() {
         DOM.mediaModal.classList.remove('active');
         DOM.modalContent.innerHTML = '';
+    }
+    // ★ 新增：信息弹窗
+    function openInfoModal() {
+        DOM.infoModal.classList.add('active');
+    }
+
+    function closeInfoModal() {
+        DOM.infoModal.classList.remove('active');
     }
 
     // ============================================
