@@ -7,7 +7,8 @@
  * 3. 自动轮询 + Realtime 监听新回复
  * 4. 打字时不被刷新打断（草稿本地保存）
  * 5. 新消息到达时自动滚动
- * 6. 支持私密/公开对话（✨ 新增）
+ * 6. 支持私密/公开对话
+ * 7. 公开对话显示真实昵称
  */
 
 (function () {
@@ -90,7 +91,7 @@
         initUI();
         initEventListeners();
 
-        // ✨ NEW: 动态创建可见性切换按钮（放在输入区域上方）
+        // 动态创建可见性切换按钮
         createVisibilityToggle();
 
         await loadConversations();
@@ -144,9 +145,8 @@
         }
     }
 
-    // ✨ NEW: 创建可见性切换按钮
+    // ✨ 创建可见性切换按钮
     function createVisibilityToggle() {
-        // 避免重复创建
         if (document.getElementById('visibilityToggle')) return;
 
         const toggleContainer = document.createElement('div');
@@ -160,7 +160,6 @@
             </label>
         `;
 
-        // 插入到 input-area 之前（紧挨着上传预览下方）
         const inputArea = document.querySelector('.input-area');
         if (inputArea) {
             inputArea.parentNode.insertBefore(toggleContainer, inputArea);
@@ -256,7 +255,6 @@
     // ============================================
     async function loadConversations() {
         try {
-            // ✨ NEW: 使用 .or() 加载自己的私密对话和所有公开对话
             const { data, error } = await window.TryToSeek.supabase
                 .from('conversations')
                 .select(`
@@ -300,8 +298,6 @@
             
             const time = lastMsg ? window.TryToSeek.formatTime(lastMsg.created_at) : '';
             const isActive = conv.id === State.currentConversationId;
-
-            // ✨ NEW: 显示公开/私密图标
             const visibilityIcon = conv.visibility === 'public' ? '🌍' : '🔒';
 
             return `
@@ -329,7 +325,7 @@
                     user_id: State.currentUser.id,
                     title: '新对话',
                     status: 'active',
-                    visibility: 'private' // 默认私密
+                    visibility: 'private'
                 })
                 .select()
                 .single();
@@ -377,6 +373,7 @@
         const chatContainer = DOM.chatContainer;
 
         try {
+            // ✨ 关键：同时加载 sender_name 字段
             const { data, error } = await window.TryToSeek.supabase
                 .from('messages')
                 .select('*')
@@ -497,13 +494,32 @@
         scrollToBottom();
     }
 
+    // ============================================
+    // ✨ 核心修改：renderMessage 显示真实昵称
+    // ============================================
     function renderMessage(msg) {
-        const isUser = msg.sender_type === 'user';
+        // 判断消息归属
+        const isOwn = msg.sender_id === State.currentUser.id;
+        const isAdmin = msg.sender_type === 'admin';
         const time = window.TryToSeek.formatTime(msg.created_at);
-        const senderName = isUser ? '我' : '管理员';
-        const avatarText = isUser 
-            ? (State.currentUser.email?.charAt(0).toUpperCase() || '我')
-            : 'A';
+
+        // ✨ 昵称逻辑：
+        // - 管理员发的 → 显示"管理员"
+        // - 自己发的 → 显示"我"
+        // - 其他人发的 → 显示 sender_name（数据库里存的昵称）
+        let senderName;
+        let avatarText;
+        if (isAdmin) {
+            senderName = '管理员';
+            avatarText = 'A';
+        } else if (isOwn) {
+            senderName = '我';
+            avatarText = State.currentUser.email?.charAt(0).toUpperCase() || '我';
+        } else {
+            // 公开对话中其他用户的消息
+            senderName = msg.sender_name || '访客';
+            avatarText = (msg.sender_name || '?').charAt(0).toUpperCase();
+        }
 
         let contentHtml = '';
 
@@ -546,13 +562,13 @@
         }
 
         return `
-            <div class="message ${isUser ? 'user' : 'admin'}" data-id="${msg.id}">
+            <div class="message ${isOwn ? 'user' : 'admin'}" data-id="${msg.id}">
                 <div class="message-avatar">${avatarText}</div>
                 <div class="message-content">
                     <div class="message-header">
-                        <span class="message-sender">${senderName}</span>
+                        <span class="message-sender">${escapeHtml(senderName)}</span>
                         <span class="message-time">${time}</span>
-                        ${msg.is_read ? '<span style="font-size:10px;color:var(--accent);">✓ 已读</span>' : ''}
+                        ${msg.is_read && isOwn ? '<span style="font-size:10px;color:var(--accent);">✓ 已读</span>' : ''}
                     </div>
                     ${contentHtml}
                 </div>
@@ -597,7 +613,7 @@
     }
 
     // ============================================
-    // 发送消息（⭐ 修改点：创建对话时传入 visibility）
+    // ✨ 核心修改：sendMessage 传入 sender_name
     // ============================================
     async function sendMessage() {
         const text = DOM.messageInput.value.trim();
@@ -605,11 +621,14 @@
 
         if (!text && !hasFiles) return;
 
-        // 如果没有当前对话，先创建
+        // 获取当前用户的昵称
+        const myName = State.currentUser.user_metadata?.display_name 
+                    || State.currentUser.email?.split('@')[0] 
+                    || '我';
+
         if (!State.currentConversationId) {
             try {
                 const title = text ? text.substring(0, 30) : '新对话';
-                // ✨ NEW: 读取可见性开关状态
                 const checkbox = document.getElementById('publicCheckbox');
                 const isPublic = checkbox ? checkbox.checked : false;
                 const visibility = isPublic ? 'public' : 'private';
@@ -620,7 +639,7 @@
                         user_id: State.currentUser.id,
                         title: title,
                         status: 'active',
-                        visibility: visibility   // ← 传入可见性
+                        visibility: visibility
                     })
                     .select()
                     .single();
@@ -647,10 +666,12 @@
 
         try {
             if (text) {
+                // ✨ 关键：传入 sender_name
                 await insertMessage({
                     conversation_id: State.currentConversationId,
-                    sender_type: 'user',
+                    sender_type: State.isAdmin ? 'admin' : 'user',
                     sender_id: State.currentUser.id,
+                    sender_name: myName,   // ← 新增
                     content_type: 'text',
                     content: text
                 });
@@ -670,8 +691,9 @@
 
                 await insertMessage({
                     conversation_id: State.currentConversationId,
-                    sender_type: 'user',
+                    sender_type: State.isAdmin ? 'admin' : 'user',
                     sender_id: State.currentUser.id,
+                    sender_name: myName,   // ← 新增
                     content_type: contentType,
                     content: url,
                     file_name: file.name,
@@ -803,7 +825,6 @@
             if (State.currentConversationId && document.visibilityState === 'visible') {
                 await loadMessages(State.currentConversationId, true);
             }
-            
         }, State.pollIntervalMs);
     }
 
