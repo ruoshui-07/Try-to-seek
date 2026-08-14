@@ -40,6 +40,10 @@
                 <div class="auth-divider"><span>或</span></div>
                 <button class="btn-secondary" id="showSignUp">创建新账号</button>
                 <div class="auth-message" id="loginMessage"></div>
+                <!-- ★ 新增：邮箱验证持久提示 -->
+                <div id="loginVerifyHint" class="auth-message success" style="display:none;">
+                    📧 注册成功！请检查您的邮箱（包括垃圾箱），点击确认链接完成激活。
+                </div>
             </div>
 
             <!-- 注册表单 -->
@@ -92,40 +96,50 @@
         const loginForm = document.getElementById('loginForm');
         const signUpForm = document.getElementById('signUpForm');
         const resetForm = document.getElementById('resetForm');
+        const loginVerifyHint = document.getElementById('loginVerifyHint');
 
-        // 切换表单
+        // 切换表单时隐藏提示
+        function switchForm(showForm) {
+            loginForm.classList.toggle('hidden', showForm !== 'login');
+            signUpForm.classList.toggle('hidden', showForm !== 'signUp');
+            resetForm.classList.toggle('hidden', showForm !== 'reset');
+            // 切换表单时不自动隐藏提示，但可在此处按需重置
+        }
+
         document.getElementById('showSignUp').addEventListener('click', () => {
-            loginForm.classList.add('hidden');
-            signUpForm.classList.remove('hidden');
-            resetForm.classList.add('hidden');
+            switchForm('signUp');
         });
 
         document.getElementById('showLogin').addEventListener('click', () => {
-            loginForm.classList.remove('hidden');
-            signUpForm.classList.add('hidden');
-            resetForm.classList.add('hidden');
+            switchForm('login');
         });
 
         document.getElementById('forgotLink').addEventListener('click', (e) => {
             e.preventDefault();
-            loginForm.classList.add('hidden');
-            signUpForm.classList.add('hidden');
-            resetForm.classList.remove('hidden');
+            switchForm('reset');
         });
 
         document.getElementById('backToLogin').addEventListener('click', () => {
-            loginForm.classList.remove('hidden');
-            signUpForm.classList.add('hidden');
-            resetForm.classList.add('hidden');
+            switchForm('login');
         });
 
-        // 显示消息
+        // 显示消息（短暂）
         function showMessage(elementId, message, type = 'error') {
             const el = document.getElementById(elementId);
             el.textContent = message;
             el.className = `auth-message ${type}`;
             el.style.display = 'block';
             setTimeout(() => { el.style.display = 'none'; }, 5000);
+        }
+
+        // 显示持久提示（用于邮箱验证）
+        function showVerifyHint(message) {
+            loginVerifyHint.textContent = message;
+            loginVerifyHint.style.display = 'block';
+        }
+
+        function hideVerifyHint() {
+            loginVerifyHint.style.display = 'none';
         }
 
         // 登录
@@ -143,8 +157,20 @@
             btn.textContent = '登录中...';
 
             try {
-                await Auth.signIn(email, password);
-                // 检查是否是管理员
+                // 尝试登录
+                const result = await Auth.signIn(email, password);
+                // 获取当前用户（不同版本的 Supabase 返回结构可能不同，兼容处理）
+                const user = result?.user || result?.data?.user || Auth.getCurrentUser();
+                
+                // 检查邮箱是否已验证
+                if (user && !user.email_confirmed_at) {
+                    showVerifyHint('⚠️ 您的邮箱尚未验证，请先查收确认邮件并点击链接激活。');
+                    btn.disabled = false;
+                    btn.textContent = '登录';
+                    return; // 阻止跳转
+                }
+
+                // 已验证，正常跳转
                 const admin = await window.TryToSeek.isAdmin();
                 window.location.href = admin ? 'admin.html' : 'index.html';
             } catch (error) {
@@ -182,10 +208,13 @@
 
             try {
                 await Auth.signUp(email, password, name);
-                showMessage('signUpMessage', '注册成功！请检查邮箱完成验证。', 'success');
+                
+                // 注册成功 → 显示持久提示，并切换到登录表单
+                showVerifyHint('📧 注册成功！请检查您的邮箱（包括垃圾箱），点击确认链接完成激活。');
+                
+                // 延迟切换到登录表单（提示保留）
                 setTimeout(() => {
-                    loginForm.classList.remove('hidden');
-                    signUpForm.classList.add('hidden');
+                    switchForm('login');
                     document.getElementById('loginEmail').value = email;
                 }, 2000);
             } catch (error) {
