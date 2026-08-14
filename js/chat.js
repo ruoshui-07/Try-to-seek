@@ -785,7 +785,7 @@
             if (State.currentConversationId && document.visibilityState === 'visible') {
                 await loadMessages(State.currentConversationId, true); // force 默认为 false
             }
-            }
+            
         }, State.pollIntervalMs);
     }
 
