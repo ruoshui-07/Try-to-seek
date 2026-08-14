@@ -1,8 +1,8 @@
 /**
- * TryToSeek - 管理员端逻辑
+ * TryToSeek - 能工智人端逻辑
  * 
  * 核心功能：
- * 1. 管理员登录验证
+ * 1. 能工智人登录验证
  * 2. 查看所有用户对话
  * 3. 回复用户消息（文字/图片/文件）
  * 4. 实时接收新消息
@@ -83,7 +83,7 @@
 
         // 权限检查
         if (!State.isAdmin) {
-            showToast('⚠️ 需要管理员权限', 'error');
+            showToast('⚠️ 需要能工智人权限', 'error');
             setTimeout(() => window.location.href = 'index.html', 2000);
             return;
         }
@@ -463,7 +463,7 @@
     function renderAdminMessage(msg) {
         const isAdmin = msg.sender_type === 'admin';
         const time = window.TryToSeek.formatTime(msg.created_at);
-        const senderName = isAdmin ? '我（管理员）' : '用户';
+        const senderName = isAdmin ? '我（能工智人）' : '用户';
         const avatarText = isAdmin ? 'A' : 'U';
 
         let contentHtml = '';
@@ -591,18 +591,18 @@
     }
 
     async function insertAdminMessage(msgData) {
-        console.log('管理员发送数据:', msgData);  // ✨ 添加日志便于调试
+        console.log('能工智人发送数据:', msgData);  // ✨ 添加日志便于调试
         const { error } = await window.TryToSeek.supabase
             .from('messages')
             .insert(msgData);
         if (error) {
-            console.error('❌ 管理员插入消息失败:', error);  // ✨ 详细错误日志
+            console.error('❌ 能工智人插入消息失败:', error);  // ✨ 详细错误日志
             throw error;
         }
     }
 
     // ============================================
-    // 文件上传（管理员）
+    // 文件上传（能工智人）
     // ============================================
     async function handleAdminFileSelect(files) {
         for (const file of files) {
