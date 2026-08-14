@@ -44,8 +44,10 @@ const STORAGE_BUCKET = (typeof TRYTOSEEK_CONFIG !== 'undefined')
 // 文件上传安全配置
 // ============================================================
 
-// 最大文件大小：50MB（字节）
-const MAX_FILE_SIZE = 50 * 1024 * 1024;
+// 最大文件大小：从 config 读取，默认 50MB
+const MAX_FILE_SIZE = (typeof TRYTOSEEK_CONFIG !== 'undefined' && TRYTOSEEK_CONFIG.APP?.MAX_FILE_SIZE)
+    ? TRYTOSEEK_CONFIG.APP.MAX_FILE_SIZE
+    : 50 * 1024 * 1024;
 
 // 允许的 MIME 类型（与 Supabase Storage 后台设置保持一致）
 const ALLOWED_MIME_TYPES = [
@@ -76,8 +78,8 @@ const ALLOWED_MIME_TYPES = [
     'application/x-rar-compressed'
 ];
 
-// 人类可读的大小限制提示
-const MAX_FILE_SIZE_READABLE = '50MB';
+// 人类可读的大小限制提示（根据 MAX_FILE_SIZE 自动生成）
+const MAX_FILE_SIZE_READABLE = Math.round(MAX_FILE_SIZE / 1024 / 1024) + 'MB';
 
 // ============================================================
 // 文件上传函数（带双重校验）
