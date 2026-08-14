@@ -778,6 +778,27 @@ input, textarea { font-family: inherit; outline: none; }
     cursor: pointer;
 }
 
+/* 聊天区图片附件：限制尺寸，避免撑爆气泡 */
+.attachment-image {
+    max-width: 240px;
+    max-height: 280px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: block;
+    background: var(--bg-tertiary);
+}
+
+/* 小屏适配 */
+@media (max-width: 480px) {
+    .attachment-image {
+        max-width: 180px;
+        max-height: 220px;
+    }
+}
+
 .attachment-file {
     display: flex;
     align-items: center;
