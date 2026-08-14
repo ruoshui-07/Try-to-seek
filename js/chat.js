@@ -746,47 +746,46 @@
     // 文件上传
     // ============================================
     async function handleFileSelect(files, type) {
-    for (const file of files) {
-        if (file.size > 25 * 1024 * 1024) {
-            showToast(`文件 "${file.name}" 超过 25MB 限制`, 'error');
-            continue;
+        for (const file of files) {
+            if (file.size > 25 * 1024 * 1024) {
+                showToast(`文件 "${file.name}" 超过 25MB 限制`, 'error');
+                continue;
+            }
+
+            try {
+                showToast(`正在上传 ${file.name}...`, 'info');
+
+                const fileExt = file.name.split('.').pop();
+                const fileName = `${State.currentUser.id}/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+
+                const { data, error } = await window.TryToSeek.supabase.storage
+                    .from(window.TryToSeek.STORAGE_BUCKET)
+                    .upload(fileName, file, {
+                        cacheControl: '3600',
+                        upsert: false
+                    });
+
+                if (error) throw error;
+
+                const { data: urlData } = window.TryToSeek.supabase.storage
+                    .from(window.TryToSeek.STORAGE_BUCKET)
+                    .getPublicUrl(fileName);
+
+                const fileUrl = urlData.publicUrl;
+
+                State.pendingFiles.push({ file, url: fileUrl });
+
+                showToast(`✓ ${file.name} 已准备好发送`, 'success');
+            } catch (error) {
+                console.error('上传失败:', error);
+                showToast(`上传失败: ${error.message}`, 'error');
+            }
         }
 
-        try {
-            showToast(`正在上传 ${file.name}...`, 'info');
-
-            const bucketName = window.TryToSeek?.STORAGE_BUCKET || 'message-attachments';
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${State.currentUser.id}/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
-
-            const { data, error } = await window.TryToSeek.supabase.storage
-                .from(bucketName)
-                .upload(fileName, file, {
-                    cacheControl: '3600',
-                    upsert: false
-                });
-
-            if (error) throw error;
-
-            const { data: urlData } = window.TryToSeek.supabase.storage
-                .from(bucketName)
-                .getPublicUrl(fileName);
-
-            const fileUrl = urlData.publicUrl;
-
-            State.pendingFiles.push({ file, url: fileUrl });
-
-            showToast(`✓ ${file.name} 已准备好发送`, 'success');
-        } catch (error) {
-            console.error('上传失败:', error);
-            showToast(`上传失败: ${error.message}`, 'error');
-        }
+        renderUploadPreview();
+        DOM.imageInput.value = '';
+        DOM.fileInput.value = '';
     }
-
-    renderUploadPreview();
-    DOM.imageInput.value = '';
-    DOM.fileInput.value = '';
-}
 
     function renderUploadPreview() {
         if (State.pendingFiles.length === 0) {
