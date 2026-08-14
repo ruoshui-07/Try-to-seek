@@ -373,6 +373,7 @@
         const chatContainer = DOM.chatContainer;
 
         try {
+            // ✨ 关键：同时加载 sender_name 字段
             const { data, error } = await window.TryToSeek.supabase
                 .from('messages')
                 .select('*')
@@ -494,13 +495,18 @@
     }
 
     // ============================================
-    // ✨ 核心修改：renderMessage 显示真实昵称 + 图片防缓存
+    // ✨ 核心修改：renderMessage 显示真实昵称
     // ============================================
     function renderMessage(msg) {
+        // 判断消息归属
         const isOwn = msg.sender_id === State.currentUser.id;
         const isAdmin = msg.sender_type === 'admin';
         const time = window.TryToSeek.formatTime(msg.created_at);
 
+        // ✨ 昵称逻辑：
+        // - 管理员发的 → 显示"管理员"
+        // - 自己发的 → 显示"我"
+        // - 其他人发的 → 显示 sender_name（数据库里存的昵称）
         let senderName;
         let avatarText;
         if (isAdmin) {
@@ -510,6 +516,7 @@
             senderName = '我';
             avatarText = State.currentUser.email?.charAt(0).toUpperCase() || '我';
         } else {
+            // 公开对话中其他用户的消息
             senderName = msg.sender_name || '访客';
             avatarText = (msg.sender_name || '?').charAt(0).toUpperCase();
         }
@@ -519,13 +526,11 @@
         if (msg.content_type === 'text') {
             contentHtml = `<div class="message-bubble">${formatMessageText(msg.content)}</div>`;
         } else if (msg.content_type === 'image') {
-            // ★★★ 为图片URL添加时间戳参数，强制浏览器重新加载（避免缓存旧的404） ★★★
-            const imgSrc = msg.content + (msg.content.includes('?') ? '&' : '?') + '_t=' + Date.now();
             contentHtml = `
                 <div class="message-bubble">
                     ${msg.content ? `<p>${escapeHtml(msg.content)}</p>` : ''}
                     <div class="message-attachments">
-                        <img src="${imgSrc}" alt="${escapeHtml(msg.file_name || 'image')}" 
+                        <img src="${msg.content}" alt="${escapeHtml(msg.file_name || 'image')}" 
                              class="attachment-image" data-src="${msg.content}" 
                              data-type="image" loading="lazy">
                     </div>
@@ -616,6 +621,7 @@
 
         if (!text && !hasFiles) return;
 
+        // 获取当前用户的昵称
         const myName = State.currentUser.user_metadata?.display_name 
                     || State.currentUser.email?.split('@')[0] 
                     || '我';
@@ -660,11 +666,12 @@
 
         try {
             if (text) {
+                // ✨ 关键：传入 sender_name
                 await insertMessage({
                     conversation_id: State.currentConversationId,
                     sender_type: State.isAdmin ? 'admin' : 'user',
                     sender_id: State.currentUser.id,
-                    sender_name: myName,
+                    sender_name: myName,   // ← 新增
                     content_type: 'text',
                     content: text
                 });
@@ -686,7 +693,7 @@
                     conversation_id: State.currentConversationId,
                     sender_type: State.isAdmin ? 'admin' : 'user',
                     sender_id: State.currentUser.id,
-                    sender_name: myName,
+                    sender_name: myName,   // ← 新增
                     content_type: contentType,
                     content: url,
                     file_name: file.name,
@@ -736,15 +743,9 @@
     }
 
     // ============================================
-    // 文件上传（★ 硬编码存储桶名称，避免变量丢失）
+    // 文件上传
     // ============================================
-    // ============================================
-// 文件上传
-// ============================================
-async function handleFileSelect(files, type) {
-    // 强制使用正确的 Bucket 名称，防止变量读取失败
-    const BUCKET_NAME = 'message-attachments'; 
-    
+    async function handleFileSelect(files, type) {
     for (const file of files) {
         if (file.size > 25 * 1024 * 1024) {
             showToast(`文件 "${file.name}" 超过 25MB 限制`, 'error');
@@ -754,12 +755,12 @@ async function handleFileSelect(files, type) {
         try {
             showToast(`正在上传 ${file.name}...`, 'info');
 
-            // 【修改点】：直接使用写死的 BUCKET_NAME
+            const bucketName = window.TryToSeek?.STORAGE_BUCKET || 'message-attachments';
             const fileExt = file.name.split('.').pop();
             const fileName = `${State.currentUser.id}/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
 
             const { data, error } = await window.TryToSeek.supabase.storage
-                .from(BUCKET_NAME) // 【修改点】：这里使用写死的值
+                .from(bucketName)
                 .upload(fileName, file, {
                     cacheControl: '3600',
                     upsert: false
@@ -768,7 +769,7 @@ async function handleFileSelect(files, type) {
             if (error) throw error;
 
             const { data: urlData } = window.TryToSeek.supabase.storage
-                .from(BUCKET_NAME) // 【修改点】：这里也使用写死的值
+                .from(bucketName)
                 .getPublicUrl(fileName);
 
             const fileUrl = urlData.publicUrl;
@@ -786,11 +787,6 @@ async function handleFileSelect(files, type) {
     DOM.imageInput.value = '';
     DOM.fileInput.value = '';
 }
-
-        renderUploadPreview();
-        DOM.imageInput.value = '';
-        DOM.fileInput.value = '';
-    }
 
     function renderUploadPreview() {
         if (State.pendingFiles.length === 0) {
