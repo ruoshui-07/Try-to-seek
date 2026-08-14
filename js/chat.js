@@ -251,6 +251,7 @@
                         content, content_type, created_at, sender_type
                     )
                 `)
+                .eq('user_id', State.currentUser.id) 
                 .order('updated_at', { ascending: false });
 
             if (error) throw error;
