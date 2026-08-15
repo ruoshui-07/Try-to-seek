@@ -248,7 +248,7 @@
                 .select(`
                     *,
                     profiles:user_id(email, display_name, deleted_at),
-                    messages:messages(count),
+                    unread_msgs:messages(sender_type, is_read),
                     last_msg:messages(content, content_type, created_at, sender_type, is_read)
                 `)
                 .order('updated_at', { ascending: false });
@@ -259,14 +259,18 @@
 
             let conversations = data || [];
 
+            // 给每条对话附加计算出的未读数（unread_msgs 数组 → 单值计数）
+            conversations = conversations.map(conv => {
+                const unread = (conv.unread_msgs || []).filter(m =>
+                    m.sender_type === 'user' && !m.is_read
+                ).length;
+                // .messages 字段保留给 conversationsSignature / renderConversationList 里的旧逻辑
+                return { ...conv, _unread: unread };
+            });
+
             // 筛选未读
             if (filter === 'unread') {
-                conversations = conversations.filter(conv => {
-                    const unread = conv.messages?.filter(m =>
-                        m.sender_type === 'user' && !m.is_read
-                    ).length;
-                    return unread > 0;
-                });
+                conversations = conversations.filter(conv => conv._unread > 0);
             }
 
             // 数据指纹比较：若数据无变化，跳过列表重渲染（避免侧栏抖动）
@@ -314,9 +318,11 @@
             const time = lastMsg ? window.TryToSeek.formatTime(lastMsg.created_at) : '';
 
             // 计算未读
-            const unread = conv.messages?.filter(m =>
-                m.sender_type === 'user' && !m.is_read
-            ).length || 0;
+            const unread = (typeof conv._unread === 'number')
+                ? conv._unread
+                : (conv.unread_msgs || []).filter(m =>
+                    m.sender_type === 'user' && !m.is_read
+                ).length || 0;
 
             const isActive = conv.id === State.currentConversationId;
             const avatarText = isDeleted ? '✕' : userName.charAt(0).toUpperCase();
@@ -463,9 +469,9 @@
         if (!convs || convs.length === 0) return '';
         return convs.map(c => {
             const lastMsg = c.last_msg?.[0];
-            const unreadCount = c.messages?.filter(m =>
-                m.sender_type === 'user' && !m.is_read
-            ).length || 0;
+            const unreadCount = (typeof c._unread === 'number')
+                ? c._unread
+                : (c.unread_msgs || []).filter(m => m.sender_type === 'user' && !m.is_read).length || 0;
             return `${c.id}:${c.updated_at}:${unreadCount}:${lastMsg?.id || ''}:${lastMsg?.is_read ? 1 : 0}:${c.profiles?.deleted_at || ''}`;
         }).join('|');
     }
@@ -868,6 +874,16 @@
                 .eq('is_read', false);
 
             if (error) throw error;
+
+            // 本地同步：把对话的未读清零，避免依赖轮询才能消除红点
+            const conv = State.conversations.find(c => c.id === convId);
+            if (conv) {
+                if (conv.unread_msgs) {
+                    conv.unread_msgs = conv.unread_msgs.map(m => ({ ...m, is_read: true }));
+                }
+                conv._unread = 0;
+                renderConversationList();
+            }
         } catch (e) {
             console.warn('标记已读失败:', e);
         }
