@@ -36,6 +36,7 @@
     const DOM = {
         sidebar: document.getElementById('sidebar'),
         sidebarToggle: document.getElementById('sidebarToggle'),
+        sidebarOverlay: document.getElementById('sidebarOverlay'),
         conversationList: document.getElementById('conversationList'),
         currentConvTitle: document.getElementById('currentConvTitle'),
         chatContainer: document.getElementById('chatContainer'),
@@ -153,7 +154,28 @@
 
     function initEventListeners() {
         DOM.sidebarToggle.addEventListener('click', () => {
-            DOM.sidebar.classList.toggle('open');
+            if (window.innerWidth <= 768) {
+                const willOpen = !DOM.sidebar.classList.contains('open');
+                DOM.sidebar.classList.toggle('open', willOpen);
+                DOM.sidebarOverlay.classList.toggle('active', willOpen);
+            } else {
+                DOM.sidebar.classList.toggle('collapsed');
+            }
+        });
+
+        // 移动端：点击遮罩关闭侧栏
+        DOM.sidebarOverlay.addEventListener('click', () => {
+            DOM.sidebar.classList.remove('open');
+            DOM.sidebarOverlay.classList.remove('active');
+        });
+
+        // 移动端：选择对话后自动收起侧栏
+        DOM.conversationList.addEventListener('click', (e) => {
+            const item = e.target.closest('.conversation-item');
+            if (item && window.innerWidth <= 768) {
+                DOM.sidebar.classList.remove('open');
+                DOM.sidebarOverlay.classList.remove('active');
+            }
         });
 
         DOM.newChatBtn.addEventListener('click', () => {
