@@ -196,6 +196,16 @@ CREATE POLICY "conversations_delete_own" ON public.conversations
     FOR DELETE
     USING (auth.uid() = user_id);
 
+-- 管理员可删除任何对话
+CREATE POLICY "conversations_delete_admin" ON public.conversations
+    FOR DELETE
+    USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles p
+            WHERE p.id = auth.uid() AND p.is_admin = TRUE
+        )
+    );
+
 -- --------------------------------------------
 -- messages 表的 RLS 策略
 -- --------------------------------------------

@@ -65,6 +65,11 @@
         modalClose: document.getElementById('adminModalClose'),
         modalContent: document.getElementById('adminModalContent'),
         toastContainer: document.getElementById('adminToastContainer'),
+        confirmModal: document.getElementById('adminConfirmModal'),
+        confirmModalTitle: document.getElementById('adminConfirmModalTitle'),
+        confirmModalMessage: document.getElementById('adminConfirmModalMessage'),
+        confirmModalCancel: document.getElementById('adminConfirmModalCancel'),
+        confirmModalOk: document.getElementById('adminConfirmModalOk'),
     };
 
     // ============================================
@@ -275,6 +280,7 @@
         DOM.convList.innerHTML = State.conversations.map(conv => {
             const userEmail = conv.profiles?.email || '未知用户';
             const userName = conv.profiles?.display_name || userEmail.split('@')[0];
+            const displayTitle = conv.title || userName;
             const lastMsg = conv.last_msg?.[0];
             const preview = lastMsg
                 ? (lastMsg.content_type === 'text'
@@ -283,32 +289,36 @@
                 : '暂无消息';
 
             const time = lastMsg ? window.TryToSeek.formatTime(lastMsg.created_at) : '';
-            
+
             // 计算未读
-            const unread = conv.messages?.filter(m => 
+            const unread = conv.messages?.filter(m =>
                 m.sender_type === 'user' && !m.is_read
             ).length || 0;
 
             const isActive = conv.id === State.currentConversationId;
 
             return `
-                <div class="user-list-item ${isActive ? 'active' : ''}" 
+                <div class="user-list-item ${isActive ? 'active' : ''}"
                      data-id="${conv.id}"
                      onclick="AdminApp.openConversation('${conv.id}')">
                     <div class="user-avatar" style="width:28px;height:28px;font-size:12px;">
                         ${userName.charAt(0).toUpperCase()}
                     </div>
-                    <div style="flex:1;overflow:hidden;">
-                        <div class="user-email-text" style="font-size:12px;font-weight:500;">
-                            ${escapeHtml(userName)}
+                    <div style="flex:1;overflow:hidden;min-width:0;">
+                        <div class="user-email-text" style="font-size:12px;font-weight:500;" title="${escapeHtml(userEmail)}">
+                            ${escapeHtml(displayTitle)}
                         </div>
                         <div style="font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                             ${escapeHtml(preview)}
                         </div>
                     </div>
-                    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
+                    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0;">
                         <span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">${time}</span>
                         ${unread > 0 ? `<span class="user-unread">${unread}</span>` : ''}
+                        <div class="conv-actions" onclick="event.stopPropagation();">
+                            <button class="conv-edit" title="重命名" onclick="AdminApp.editConversationTitle('${conv.id}')">✏️</button>
+                            <button class="conv-delete" title="删除" onclick="AdminApp.deleteConversation('${conv.id}')">🗑️</button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -324,7 +334,8 @@
 
         if (conv) {
             const userName = conv.profiles?.display_name || conv.profiles?.email?.split('@')[0] || '用户';
-            DOM.adminConvTitle.textContent = `与 ${userName} 的对话`;
+            const displayTitle = conv.title || userName;
+            DOM.adminConvTitle.textContent = `与 ${displayTitle} 的对话`;
         }
 
         // 更新列表激活状态
@@ -667,6 +678,157 @@
     }
 
     // ============================================
+    // 改名 / 删除对话（管理员可操作任意对话）
+    // ============================================
+    async function updateConversationTitle(conversationId, title) {
+        const { error } = await window.TryToSeek.supabase
+            .from('conversations')
+            .update({ title })
+            .eq('id', conversationId);
+        if (error) throw error;
+
+        const conv = State.conversations.find(c => c.id === conversationId);
+        if (conv) conv.title = title;
+    }
+
+    function editConversationTitle(conversationId) {
+        const conv = State.conversations.find(c => c.id === conversationId);
+        if (!conv) return;
+
+        const convItemEl = DOM.convList.querySelector(
+            `.user-list-item[data-id="${conversationId}"]`
+        );
+        if (!convItemEl) return;
+
+        const nameEl = convItemEl.querySelector('.user-email-text');
+        if (!nameEl) return;
+
+        const userEmail = conv.profiles?.email || '未知用户';
+        const userName = conv.profiles?.display_name || userEmail.split('@')[0];
+        const oldTitle = conv.title || userName;
+
+        // 把标题文本替换为输入框
+        nameEl.outerHTML = `<input type="text" class="conv-title-edit user-email-text" 
+            value="${escapeHtml(oldTitle).replace(/"/g, '&quot;')}" maxlength="50">`;
+
+        const input = convItemEl.querySelector('.conv-title-edit');
+        if (!input) return;
+
+        input.addEventListener('click', (e) => e.stopPropagation());
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+
+        let done = false;
+
+        const submit = async () => {
+            if (done) return;
+            done = true;
+            const newTitle = input.value.trim();
+            if (!newTitle || newTitle === oldTitle) {
+                renderConversationList();
+                return;
+            }
+            try {
+                await updateConversationTitle(conversationId, newTitle);
+                await loadAllConversations();
+                // 如果是当前对话，更新标题栏
+                if (State.currentConversationId === conversationId) {
+                    DOM.adminConvTitle.textContent = `与 ${newTitle} 的对话`;
+                }
+                showToast('标题已更新', 'success');
+            } catch (e) {
+                console.warn('标题更新失败:', e);
+                showToast('更新失败: ' + e.message, 'error');
+                renderConversationList();
+            }
+        };
+
+        const cancel = () => {
+            if (done) return;
+            done = true;
+            renderConversationList();
+        };
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); submit(); }
+            else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+        });
+        input.addEventListener('blur', () => {
+            setTimeout(() => { if (!done) submit(); }, 150);
+        });
+    }
+
+    async function deleteConversation(conversationId) {
+        const conv = State.conversations.find(c => c.id === conversationId);
+        if (!conv) return;
+
+        const userEmail = conv.profiles?.email || '未知用户';
+        const userName = conv.profiles?.display_name || userEmail.split('@')[0];
+        const title = conv.title || userName;
+
+        const confirmed = await showConfirmDialog({
+            title: '删除对话',
+            message: `确定要删除与"${title}"的对话吗？此操作无法撤销，所有消息记录都会被清除。`,
+            okText: '删除',
+            okType: 'danger'
+        });
+        if (!confirmed) return;
+
+        try {
+            const { error } = await window.TryToSeek.supabase
+                .from('conversations')
+                .delete()
+                .eq('id', conversationId);
+            if (error) throw error;
+
+            State.conversations = State.conversations.filter(c => c.id !== conversationId);
+
+            // 如果删除的是当前对话，回到欢迎页
+            if (State.currentConversationId === conversationId) {
+                State.currentConversationId = null;
+                State.messages = [];
+                DOM.adminConvTitle.textContent = '选择对话';
+                DOM.welcomeScreen.style.display = 'flex';
+                DOM.messagesList.style.display = 'none';
+                DOM.inputArea.style.display = 'none';
+            }
+
+            renderConversationList();
+            updateStats();
+            showToast('对话已删除', 'success');
+        } catch (e) {
+            console.error('删除失败:', e);
+            showToast('删除失败: ' + e.message, 'error');
+        }
+    }
+
+    // 通用确认弹窗 Promise 封装
+    function showConfirmDialog({ title, message, okText = '确认', cancelText = '取消', okType = 'primary' }) {
+        return new Promise((resolve) => {
+            if (!DOM.confirmModal) return resolve(false);
+
+            DOM.confirmModalTitle.textContent = title || '确认';
+            DOM.confirmModalMessage.textContent = message || '确定要执行此操作吗？';
+            DOM.confirmModalCancel.textContent = cancelText;
+            DOM.confirmModalOk.textContent = okText;
+            DOM.confirmModalOk.className = 'confirm-modal-btn ' + (okType === 'danger' ? 'danger' : 'primary');
+
+            let resolved = false;
+            const cleanup = () => {
+                DOM.confirmModal.classList.remove('active');
+                DOM.confirmModalOk.removeEventListener('click', onOk);
+                DOM.confirmModalCancel.removeEventListener('click', onCancel);
+            };
+            const onOk = () => { if (resolved) return; resolved = true; cleanup(); resolve(true); };
+            const onCancel = () => { if (resolved) return; resolved = true; cleanup(); resolve(false); };
+
+            DOM.confirmModalOk.addEventListener('click', onOk);
+            DOM.confirmModalCancel.addEventListener('click', onCancel);
+            DOM.confirmModal.classList.add('active');
+        });
+    }
+
+    // ============================================
     // 标记已读
     // ============================================
     async function markConversationAsRead(convId) {
@@ -988,6 +1150,8 @@
     // ============================================
     window.AdminApp = {
         openConversation,
+        editConversationTitle,
+        deleteConversation,
         removePendingFile: (index) => {
             State.pendingFiles.splice(index, 1);
             renderUploadPreview();

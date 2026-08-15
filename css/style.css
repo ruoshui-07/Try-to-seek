@@ -1580,6 +1580,58 @@ input, textarea { font-family: inherit; outline: none; }
     padding: 1px 6px;
     border-radius: 10px;
 }
+
+/* 管理员对话项：hover 时显示操作按钮（改名/删除） */
+.user-list-item .conv-actions {
+    display: none;
+    align-items: center;
+    gap: 2px;
+    margin-top: 2px;
+}
+
+.user-list-item:hover .conv-actions {
+    display: flex;
+}
+
+.user-list-item .conv-actions button {
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    padding: 0;
+    transition: var(--transition);
+}
+
+.user-list-item .conv-actions button:hover {
+    background: var(--bg-tertiary);
+    color: var(--accent);
+}
+
+.user-list-item .conv-actions button.conv-delete:hover {
+    color: var(--danger);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+/* 管理员侧栏：标题行内联编辑输入框 */
+.user-list-item .conv-title-edit {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--accent);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 2px 6px;
+    border-radius: 4px;
+    outline: none;
+}
 /* ★ 新增：信息弹窗 */
 .info-modal {
     display: none;
