@@ -34,6 +34,7 @@
     const DOM = {
         sidebar: document.getElementById('sidebar'),
         sidebarToggle: document.getElementById('sidebarToggle'),
+        sidebarOverlay: document.getElementById('sidebarOverlay'),
         convList: document.getElementById('adminConversationList'),
         userFilter: document.getElementById('userFilter'),
         adminConvTitle: document.getElementById('adminConvTitle'),
@@ -132,9 +133,30 @@
     }
 
     function initEventListeners() {
-        // 侧边栏
+        // 侧边栏：桌面端折叠 / 移动端滑出
         DOM.sidebarToggle.addEventListener('click', () => {
-            DOM.sidebar.classList.toggle('open');
+            if (window.innerWidth <= 768) {
+                const willOpen = !DOM.sidebar.classList.contains('open');
+                DOM.sidebar.classList.toggle('open', willOpen);
+                DOM.sidebarOverlay.classList.toggle('active', willOpen);
+            } else {
+                DOM.sidebar.classList.toggle('collapsed');
+            }
+        });
+
+        // 移动端：点击遮罩关闭侧栏
+        DOM.sidebarOverlay.addEventListener('click', () => {
+            DOM.sidebar.classList.remove('open');
+            DOM.sidebarOverlay.classList.remove('active');
+        });
+
+        // 移动端：选择对话后自动收起侧栏
+        DOM.convList.addEventListener('click', (e) => {
+            const item = e.target.closest('.user-list-item');
+            if (item && window.innerWidth <= 768 && !e.target.closest('.conv-actions') && !e.target.closest('.conv-title-edit')) {
+                DOM.sidebar.classList.remove('open');
+                DOM.sidebarOverlay.classList.remove('active');
+            }
         });
 
         // 筛选器
@@ -225,7 +247,7 @@
                 .from('conversations')
                 .select(`
                     *,
-                    profiles:user_id(email, display_name),
+                    profiles:user_id(email, display_name, deleted_at),
                     messages:messages(count),
                     last_msg:messages(content, content_type, created_at, sender_type, is_read)
                 `)
@@ -278,8 +300,9 @@
         }
 
         DOM.convList.innerHTML = State.conversations.map(conv => {
+            const isDeleted = !!conv.profiles?.deleted_at;
             const userEmail = conv.profiles?.email || '未知用户';
-            const userName = conv.profiles?.display_name || userEmail.split('@')[0];
+            const userName = isDeleted ? '已注销用户' : (conv.profiles?.display_name || userEmail.split('@')[0]);
             const displayTitle = conv.title || userName;
             const lastMsg = conv.last_msg?.[0];
             const preview = lastMsg
@@ -296,17 +319,20 @@
             ).length || 0;
 
             const isActive = conv.id === State.currentConversationId;
+            const avatarText = isDeleted ? '✕' : userName.charAt(0).toUpperCase();
+            const titleColor = isDeleted ? 'var(--text-muted)' : 'var(--text-primary)';
 
             return `
                 <div class="user-list-item ${isActive ? 'active' : ''}"
                      data-id="${conv.id}"
                      onclick="AdminApp.openConversation('${conv.id}')">
-                    <div class="user-avatar" style="width:28px;height:28px;font-size:12px;">
-                        ${userName.charAt(0).toUpperCase()}
+                    <div class="user-avatar" style="width:28px;height:28px;font-size:12px;${isDeleted ? 'background:var(--text-muted);' : ''}">
+                        ${avatarText}
                     </div>
                     <div style="flex:1;overflow:hidden;min-width:0;">
-                        <div class="user-email-text" style="font-size:12px;font-weight:500;" title="${escapeHtml(userEmail)}">
+                        <div class="user-email-text" style="font-size:12px;font-weight:500;color:${titleColor};" title="${escapeHtml(userEmail)}">
                             ${escapeHtml(displayTitle)}
+                            ${isDeleted ? '<span style="font-size:10px;color:var(--text-muted);margin-left:4px;">（已注销）</span>' : ''}
                         </div>
                         <div style="font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                             ${escapeHtml(preview)}
@@ -333,7 +359,8 @@
         const conv = State.conversations.find(c => c.id === convId);
 
         if (conv) {
-            const userName = conv.profiles?.display_name || conv.profiles?.email?.split('@')[0] || '用户';
+            const isDeleted = !!conv.profiles?.deleted_at;
+            const userName = isDeleted ? '已注销用户' : (conv.profiles?.display_name || conv.profiles?.email?.split('@')[0] || '用户');
             const displayTitle = conv.title || userName;
             DOM.adminConvTitle.textContent = `与 ${displayTitle} 的对话`;
         }
@@ -439,7 +466,7 @@
             const unreadCount = c.messages?.filter(m =>
                 m.sender_type === 'user' && !m.is_read
             ).length || 0;
-            return `${c.id}:${c.updated_at}:${unreadCount}:${lastMsg?.id || ''}:${lastMsg?.is_read ? 1 : 0}`;
+            return `${c.id}:${c.updated_at}:${unreadCount}:${lastMsg?.id || ''}:${lastMsg?.is_read ? 1 : 0}:${c.profiles?.deleted_at || ''}`;
         }).join('|');
     }
 

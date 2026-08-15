@@ -170,6 +170,20 @@
                     return; // 阻止跳转
                 }
 
+                // 检查账户是否已注销（软删除）
+                const { data: profile } = await window.TryToSeek.supabase
+                    .from('profiles')
+                    .select('deleted_at')
+                    .eq('id', user.id)
+                    .single();
+                if (profile?.deleted_at) {
+                    await Auth.signOut();
+                    showVerifyHint('⚠️ 该账户已注销，无法登录。');
+                    btn.disabled = false;
+                    btn.textContent = '登录';
+                    return;
+                }
+
                 // 已验证，正常跳转
                 const admin = await window.TryToSeek.isAdmin();
                 window.location.href = admin ? 'admin.html' : 'index.html';

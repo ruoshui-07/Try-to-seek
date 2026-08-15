@@ -65,6 +65,19 @@
                         <span id="themeLabel">切换亮色模式</span>
                     </div>
                     <div class="dropdown-divider"></div>
+                    <div class="dropdown-item" id="editNicknameBtn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        修改昵称
+                    </div>
+                    <div class="dropdown-item danger" id="deleteAccountBtn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        注销账户
+                    </div>
+                    <div class="dropdown-divider"></div>
                     <div class="dropdown-item danger" id="logoutBtn">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" stroke-linecap="round" stroke-linejoin="round"/>
@@ -243,6 +256,18 @@
             <div class="confirm-modal-actions">
                 <button class="confirm-modal-btn" id="confirmModalCancel">取消</button>
                 <button class="confirm-modal-btn danger" id="confirmModalOk">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 修改昵称弹窗 -->
+    <div class="confirm-modal" id="nicknameModal">
+        <div class="confirm-modal-box">
+            <div class="confirm-modal-title">修改昵称</div>
+            <input type="text" id="nicknameInput" class="nickname-input" maxlength="20" placeholder="输入新昵称">
+            <div class="confirm-modal-actions">
+                <button class="confirm-modal-btn" id="nicknameCancel">取消</button>
+                <button class="confirm-modal-btn primary" id="nicknameOk">保存</button>
             </div>
         </div>
     </div>

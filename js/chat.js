@@ -77,6 +77,12 @@
         infoModal: document.getElementById('infoModal'),
         infoModalClose: document.getElementById('infoModalClose'),
         infoBtn: document.getElementById('infoBtn'),
+        editNicknameBtn: document.getElementById('editNicknameBtn'),
+        deleteAccountBtn: document.getElementById('deleteAccountBtn'),
+        nicknameModal: document.getElementById('nicknameModal'),
+        nicknameInput: document.getElementById('nicknameInput'),
+        nicknameCancel: document.getElementById('nicknameCancel'),
+        nicknameOk: document.getElementById('nicknameOk'),
     };
 
     // ============================================
@@ -96,6 +102,24 @@
         }
 
         State.currentUser = Auth.getCurrentUser();
+
+        // 检查账户是否已注销（软删除）
+        try {
+            const { data: profile } = await window.TryToSeek.supabase
+                .from('profiles')
+                .select('deleted_at')
+                .eq('id', State.currentUser.id)
+                .single();
+            if (profile?.deleted_at) {
+                await Auth.signOut();
+                showToast('该账户已注销', 'error');
+                setTimeout(() => window.location.href = 'login.html', 2000);
+                return;
+            }
+        } catch (e) {
+            console.warn('检查注销状态失败:', e);
+        }
+
         State.isAdmin = await window.TryToSeek.isAdmin();
 
         initUI();
@@ -213,6 +237,26 @@
         DOM.logoutBtn.addEventListener('click', async () => {
             await Auth.signOut();
             window.location.href = 'login.html';
+        });
+
+        // 修改昵称
+        DOM.editNicknameBtn.addEventListener('click', () => {
+            DOM.userDropdown.classList.remove('active');
+            openNicknameEditor();
+        });
+        DOM.nicknameCancel.addEventListener('click', () => {
+            DOM.nicknameModal.classList.remove('active');
+        });
+        DOM.nicknameOk.addEventListener('click', saveNickname);
+        DOM.nicknameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); saveNickname(); }
+            else if (e.key === 'Escape') { DOM.nicknameModal.classList.remove('active'); }
+        });
+
+        // 注销账户
+        DOM.deleteAccountBtn.addEventListener('click', () => {
+            DOM.userDropdown.classList.remove('active');
+            deleteAccount();
         });
 
         DOM.themeToggle.addEventListener('click', () => {
@@ -940,6 +984,98 @@
             DOM.confirmModalCancel.addEventListener('click', onCancel);
             DOM.confirmModal.classList.add('active');
         });
+    }
+
+    // ============================================
+    // 修改昵称
+    // ============================================
+    function openNicknameEditor() {
+        const current = State.currentUser.user_metadata?.display_name
+            || State.currentUser.email?.split('@')[0]
+            || '';
+        DOM.nicknameInput.value = current;
+        DOM.nicknameModal.classList.add('active');
+        setTimeout(() => {
+            DOM.nicknameInput.focus();
+            DOM.nicknameInput.setSelectionRange(
+                DOM.nicknameInput.value.length,
+                DOM.nicknameInput.value.length
+            );
+        }, 50);
+    }
+
+    async function saveNickname() {
+        const newName = DOM.nicknameInput.value.trim();
+        if (!newName) {
+            showToast('昵称不能为空', 'error');
+            return;
+        }
+        if (newName.length > 20) {
+            showToast('昵称不能超过 20 个字符', 'error');
+            return;
+        }
+
+        DOM.nicknameOk.disabled = true;
+        try {
+            // 1. 更新 profiles 表（让管理员和其他用户能看到）
+            const { error: profileError } = await window.TryToSeek.supabase
+                .from('profiles')
+                .update({ display_name: newName, updated_at: new Date().toISOString() })
+                .eq('id', State.currentUser.id);
+            if (profileError) throw profileError;
+
+            // 2. 更新 auth user_metadata（让本地 UI 立即生效）
+            const { error: authError } = await window.TryToSeek.supabase.auth.updateUser({
+                data: { display_name: newName }
+            });
+            if (authError) throw authError;
+
+            // 3. 更新本地状态和 UI
+            State.currentUser.user_metadata = State.currentUser.user_metadata || {};
+            State.currentUser.user_metadata.display_name = newName;
+            DOM.userName.textContent = newName;
+            if (!State.currentUser.user_metadata.avatar_url) {
+                DOM.userAvatar.textContent = newName.charAt(0).toUpperCase();
+            }
+
+            DOM.nicknameModal.classList.remove('active');
+            showToast('昵称已更新', 'success');
+        } catch (e) {
+            console.error('更新昵称失败:', e);
+            showToast('更新失败: ' + e.message, 'error');
+        } finally {
+            DOM.nicknameOk.disabled = false;
+        }
+    }
+
+    // ============================================
+    // 注销账户（永久删除账号及所有数据）
+    // ============================================
+    async function deleteAccount() {
+        const confirmed = await showConfirmDialog({
+            title: '注销账户',
+            message: '确定要注销账户吗？此操作无法撤销，你的所有对话、消息和数据都会被永久删除。',
+            okText: '确认注销',
+            okType: 'danger'
+        });
+        if (!confirmed) return;
+
+        try {
+            // 调用数据库函数删除自己的 auth.users 记录
+            // 会通过 CASCADE 自动删除 profiles / conversations / messages
+            const { error } = await window.TryToSeek.supabase.rpc('delete_own_account');
+            if (error) throw error;
+
+            // 清理本地状态
+            try { localStorage.removeItem('trytoseek_draft'); } catch (_) {}
+            try { localStorage.removeItem('trytoseek_theme'); } catch (_) {}
+
+            await Auth.signOut();
+            window.location.href = 'login.html';
+        } catch (e) {
+            console.error('注销失败:', e);
+            showToast('注销失败: ' + e.message, 'error');
+        }
     }
 
     // ============================================

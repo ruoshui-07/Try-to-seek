@@ -282,7 +282,34 @@ CREATE POLICY "messages_update_read_own" ON public.messages
     );
 
 -- ============================================
--- 10. Storage RLS 策略 (message-attachments bucket)
+-- 10. 用户注销账户（软删除：保留对话历史，标记为已注销）
+-- ============================================
+
+-- profiles 表新增 deleted_at 字段（标记账户是否已注销）
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+-- 注销账户函数：软删除，不删 auth.users，避免 CASCADE 丢失对话历史
+-- 只更新 profiles：设置 deleted_at，display_name 改为"已注销用户"
+-- 对话和消息完整保留，管理员端可继续查看历史
+CREATE OR REPLACE FUNCTION public.delete_own_account()
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    UPDATE public.profiles
+    SET deleted_at = NOW(),
+        display_name = '已注销用户',
+        updated_at = NOW()
+    WHERE id = auth.uid();
+END;
+$$;
+
+-- 允许已登录用户调用
+GRANT EXECUTE ON FUNCTION public.delete_own_account() TO authenticated;
+
+-- ============================================
+-- 11. Storage RLS 策略 (message-attachments bucket)
 -- ============================================
 
 -- 注意：以下策略需要在 Supabase Dashboard 的 Storage 部分设置
@@ -304,13 +331,13 @@ CREATE POLICY "messages_update_read_own" ON public.messages
 --   EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = TRUE)
 
 -- ============================================
--- 11. 设置 Realtime 发布
+-- 12. 设置 Realtime 发布
 -- ============================================
 ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.conversations;
 
 -- ============================================
--- 12. 创建管理员用户（手动执行，替换为你的邮箱）
+-- 13. 创建管理员用户（手动执行，替换为你的邮箱）
 -- ============================================
 -- 步骤：
 -- 1. 先在网站上用管理员邮箱注册
