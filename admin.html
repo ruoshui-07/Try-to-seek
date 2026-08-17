@@ -77,6 +77,13 @@
                     <span id="unreadBadge" style="display:none;background:var(--accent);color:white;font-size:11px;padding:2px 8px;border-radius:10px;margin-left:8px;">0 未读</span>
                 </div>
                 <div class="header-right">
+                    <!-- ★ 新增：主题切换按钮 -->
+                    <button class="header-btn" id="adminThemeToggle" title="切换主题">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span id="adminThemeLabel">切换亮色模式</span>
+                    </button>
                     <button class="header-btn" id="markAllRead" title="全部标为已读">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/>
@@ -182,5 +189,31 @@
 
     <!-- 能工智人逻辑 -->
     <script src="js/admin.js"></script>
+
+    <!-- ★ 新增：主题切换逻辑 -->
+    <script>
+        (function() {
+            // 获取元素
+            const themeToggle = document.getElementById('adminThemeToggle');
+            const themeLabel = document.getElementById('adminThemeLabel');
+
+            // 读取已保存的主题，默认为暗色
+            const savedTheme = localStorage.getItem('trytoseek_theme') || 'dark';
+            applyTheme(savedTheme);
+
+            // 主题切换事件
+            themeToggle.addEventListener('click', function() {
+                const current = document.documentElement.getAttribute('data-theme') || 'dark';
+                const next = current === 'dark' ? 'light' : 'dark';
+                applyTheme(next);
+                localStorage.setItem('trytoseek_theme', next);
+            });
+
+            function applyTheme(theme) {
+                document.documentElement.setAttribute('data-theme', theme);
+                themeLabel.textContent = theme === 'dark' ? '切换亮色模式' : '切换暗色模式';
+            }
+        })();
+    </script>
 </body>
 </html>
